@@ -1,113 +1,133 @@
-# Orchestr-Integration — offener Bedarf (für die Session mit Sebastian)
+# B2B Sellers → Core-Lücken-Liste (Canonical Types & Orchestr)
 
-> Erstellt am Ende der „rohen" Integrations-Session (`feat/b2bsellers-api-wrapper`).
-> Diese Session hat bewusst nur die **token-freien** unteren Schichten gebaut
-> (client / types / queries). Dieses Dokument hält fest, was fehlt, um die
-> **Orchestr-Handler-Schicht** (Queries/Actions/Resolver) sauber zu bauen.
-> Nächster Schritt: mit Sebastian durchgehen, Tokens/Entities festlegen.
+> **Zweck.** Diese App ist das **Beispiel**, an dem sichtbar wird, was im
+> `@laioutr-core` (Canonical Types + Orchestr) noch fehlt, um eine
+> B2B-Sellers-Integration **nativ** und sauber zu bauen.
+>
+> **Diese Session baut bewusst NICHTS Custom.** Es wurden **keine** eigenen
+> Orchestr-Tokens, **keine** eigenen Canonical-Entity-Typen und **keine**
+> Handler definiert. (`orchestr/` enthält nur das Template-`zodFix`-Plugin.)
+> Vorhanden ist nur das **Beispiel-API-Surface**: SDK-Client, Middleware,
+> Wire-DTO-Typen und die token-freie `queries/`-Schicht (typisierte
+> `invoke`-Wrapper über alle ~91 Endpunkte). Das ist die Referenz, **nicht**
+> die fertige Integration.
+>
+> **Deliverable = diese Liste.** Die fehlenden Query-/Action-Handler und vor
+> allem die fehlenden Canonical Types werden anschließend im Core nachgezogen.
 
-## Was diese Session geliefert hat (Stand `feat/b2bsellers-api-wrapper`)
+## Entscheidungs-Prinzip (CTO)
 
-- **Backend-only-Modul** (`src/module.ts`): registriert nur `orchestrDirs`,
-  `addServerImportsDir(server/client)`, installiert nur `frontend-core` +
-  `orchestr`. Keine Sections/Blocks/UI/Image. Runtime-Config-Key
-  `@laioutr/app-b2bsellers`.
-- **Client** (`server/client/`): `@shopware/api-client` via
-  `createAPIClient<B2bSellersOperations>()`. `operations.ts` typisiert alle
-  ~91 Endpunkte (Pfad/Methode/Body/PathParams/Response). `useB2bSellersClient`
-  als Nitro-Auto-Import (Config aus `APP_CONFIG_KEY`, `sw-context-token` aus
-  Cookie).
-- **Middleware** (`server/middleware/defineB2bSellers.ts`): stellt
-  `context.client` bereit; Binder `defineB2bSellersQuery/Action/Link/ComponentResolver`
-  bereits exportiert.
-- **Wire-DTO-Typen** (`server/types/`): Employee, Offer, Customer(+Activity),
-  ProductList, CostCenter, Budget, OrderApproval, CustomerProductNumber,
-  ProductSubscription, Shared (ListResponse/Money/Criteria/Audit).
-- **queries-Schicht** (`server/queries/`): 92 typisierte `invoke`-Wrapper über
-  alle Domains. **Token-frei, kompiliert grün, aber noch nicht an Orchestr
-  angebunden.**
+> „Bei der Frage, ob eine Entität/Action in die **Canonical Types** oder direkt
+> in die **B2B-Sellers-App** gehört: **im Zweifel immer erst in die App**, und
+> wir prüfen im Nachhinein, ob es auch in die normalen Canonical Types kann."
 
-Verifiziert (kein Live-Tenant): `pnpm lint` ✅, `pnpm test` ✅,
-`pnpm dev:prepare` ✅. `test:types`: nur die bekannten Nitro-/Template-Baseline-
-Meldungen, identisch zur `app-actindo`-Referenz (kein CI-Gate).
+Klassifizierung unten:
+- **Core** = klares, anbieter-übergreifendes Commerce-Primitiv → Kandidat für Canonical Types.
+- **App-first** = B2B-Sellers-spezifisch → zunächst in die App, später Re-Eval Richtung Core.
 
-## Architektur-Lücke
+## Was im Canonical-Layer bereits existiert (Stand `@laioutr-core/canonical-types`)
 
-Die Orchestr-Builder-API ist **token-basiert**:
-- `queryHandler(token, fn)` braucht einen `QueryToken` (mit `entity`, `type`
-  `multi|single`, Input-Zod, `label`).
-- `actionHandler(token, fn)` braucht einen `ActionToken` (Input/Output-Zod).
-- `componentResolver({ entityType, provides, resolve })` braucht
-  **EntityComponentTokens** + i. d. R. einen passenden canonical Entity-Typ.
+- **Entities:** Product, ProductVariant, Category, Cart, CartItem, BreadcrumbItem, Review, MenuItem, SuggestedSearch(+Entry), Blog*, Comment.
+- **Query-Tokens:** product (search / by-slug / by-category-id / by-category-slug), category (all / by-slug), cart (get-current), wishlist (get-current), menu (by-alias).
+- **Action-Tokens:** auth (login / logout / register / recover / oauth), cart (add/remove/update-items, get-checkout-url), customer (get-current, address create/update/delete/get-all/set-default), review (create), wishlist (add/remove-items).
+- **Links:** product (variants / reviews / breadcrumb / all-categories), category (products / breadcrumb), cart (items / item-variant).
+- **Pagetypes:** product-detail / product-listing / product-search.
 
-Für die B2B-Sellers-Entities (Employee, Offer, CostCenter, Budget,
-OrderApproval, ProductList, …) existieren **noch keine** Tokens/Entity-Typen.
-Rohe `z.object`-Schemas reichen NICHT — der Handler kompiliert nicht ohne Token.
+**Befund:** Es gibt **keine** Canonical-Entity und **keine** Tokens für
+Order, Customer (außer get-current/address), Employee, Offer, CostCenter,
+Budget, OrderApproval, CustomerActivity, ProductSubscription oder
+CustomerProductNumber. Damit lässt sich **kein** B2B-Sellers-Domänen-Endpunkt
+an einen bestehenden Canonical-Token binden → in dieser Session wurden **keine**
+Handler integriert (es gibt nichts „Vorhandenes" zum Andocken, ohne zu erfinden).
 
-## Konkreter Bedarf (mit Sebastian zu klären/definieren)
+---
 
-### 1. Canonical Entity-Typen
-Pro Entity prüfen, ob es in `@laioutr-core/canonical-types` einen passenden Typ
-gibt, oder ob ein neuer (B2B-)Entity-Typ definiert werden muss:
-`Employee`, `EmployeeRole`, `Offer`, `CostCenter`, `Budget`, `OrderApproval`,
-`ProductList`, `CustomerActivity`, `ProductSubscription`, `CustomerProductNumber`.
+## A. Querschnitt / geteilte Bausteine (zuerst, weil mehrfach gebraucht)
 
-### 2. QueryTokens (`defineQueryToken`)
-Pro Listen-/Detail-Query: `name` (namespaced `@laioutr/app-b2bsellers/<domain>/<query>`),
-`entity`, `type` (`multi` für Listen, `single` für Detail), `input` (Zod),
-`label`. Kandidaten u. a.:
-- `employee/list` (multi, Employee), `employee/get` (single)
-- `offer/list` (multi, Offer), `offer/get` (single)
-- `cost-center/list`, `budget/list`, `order-approval/list`, `product-list/list`,
-  `employee-order/list`, `customer-activity/list`, `product-subscription/list`, …
+| # | Fehlt im Core | Gebraucht von | Empfehlung |
+|---|---|---|---|
+| A1 | **`Order`-Entity** + Query-Tokens `order/list` (multi), `order/by-id` (single) + Component-Resolver | employee-orders, customer-last-orders, budget/{id}/orders, order-approval | **Core** (Order ist Commerce-Primitiv) |
+| A2 | **`Customer`-Entity** (B2B-Sicht) + Query `customer/search` (multi), `customer/by-id` (single) | customer search, sales-ranking, überall wo `customerId` referenziert | **Core** (Customer-Entity), B2B-Such-Semantik **App-first** |
+| A3 | **`Money`/Preis-Canonical** für B2B-Preise (`customer-prices`) | customer-prices, offer line items, budget | **Core** (Money existiert teils via shared-ecommerce → prüfen/erweitern) |
+| A4 | **Shopware-`Criteria`-Input-Schema** (filter/sort/associations/aggregations/pagination) als wiederverwendbares Zod | alle `(Criteria)`-Endpunkte (search, *list, variant-list, budget orders-filtered) | **App-first** (Shopware-spezifisch); ggf. Shared-Util |
+| A5 | **Context-Token-Lifecycle** (`sw-context-token` Cookie set bei SDK-`onContextChanged`, in onRequest-Phase) | jeder authentifizierte Call | **App** (Mechanik); Pattern dokumentieren |
 
-### 3. ActionTokens (`defineActionToken`)
-Pro Mutation, namespaced `@laioutr/app-b2bsellers/<domain>/<action>`, mit
-Input/Output-Zod. Mutationen sind self-contained (keine Entity nötig) und der
-schnellste erste Orchestr-Schritt. Kandidaten u. a.:
-- employee: create / add / update / delete
-- offer: delete / convert-to-order / status / mail / document
-- customer-activity(+type): create / update / delete
-- product-list: create / update / delete / remove-product
-- cost-center: create / update / patch / delete
-- budget: create / update / patch / delete
-- order-approval: create / approve / decline / execute / refresh / update /
-  remind / remind-all / settings / line-items
-- customer-product-number: create / delete / import
-- account-request, product-request, sales-representative/fast-order
+---
 
-### 4. EntityComponentTokens + Component-Resolver
-Pro renderbare Entity: `defineEntityComponentToken` + `componentResolver`
-(`entityType`, `provides`, `resolve`), inkl. Cache-Strategie. Hydriert die von
-den QueryHandlern zurückgegebenen IDs.
+## B. Pro Domain — fehlende Canonical/Orchestr-Bausteine
 
-### 5. DTO→Canonical-Mapper (`server/*-helper/`)
-Mapping der Wire-DTOs (`server/types/`) auf die canonical Component-Shapes —
-analog `app-actindo/server/orchestr-helper/` + `actindo-helper/`.
+Legende: **Q** = QueryToken (+Entity+Component-Resolver), **A** = ActionToken (self-contained), **L** = LinkToken.
 
-### 6. Context-Token-Lifecycle
-`@shopware/api-client` rotiert `sw-context-token` und feuert `onContextChanged`.
-Der neue Token muss in den Response-Cookie (`CONTEXT_TOKEN_COOKIE`) geschrieben
-werden — in der **`onRequest`/Response-Phase**, NICHT in `extendRequest`
-(dort sind Header ggf. schon raus). Strategie + `setCookie`-Hook festlegen.
+| Domain | Fehlende Entity-Typen | Fehlende Q (Query-Tokens) | Fehlende A (Action-Tokens) | Empf. |
+|---|---|---|---|---|
+| **employee** | Employee, EmployeeRole, EmployeePermission | list, by-id, roles, permissions | create, add, update, delete | App-first |
+| **employee-order** | (nutzt A1 `Order`) | list, by-id | – | App-first → bindet an Core-Order (A1) |
+| **offer** | Offer, OfferLineItem, OfferMailTemplate | list, by-id, mail-templates | delete, convert-to-order, update-status, send-mail, generate-document | App-first |
+| **cost-center** | CostCenter | list, by-id | create, update, patch, delete | App-first |
+| **budget** | Budget, BudgetOrder, BudgetPeriodType | list, by-id, orders, orders-filtered, period-types, approval-employees, my-budgets | create, update, patch, delete | App-first |
+| **order-approval** | OrderApproval, Approver, ActivityEntry, ApprovalSettings | list, by-id, activity, approvers, budget-summary, count-pending, customer-settings(get) | create, approve, decline, execute, refresh, update, remind, remind-all, update-pending, customer-settings(set), update-line-item, delete-line-item | App-first |
+| **product-list** | ProductList, ProductListItem | list, by-id | create, update, delete, remove-product | App-first (alt.: Canonical **Wishlist** erweitern → Core prüfen) |
+| **customer-activity** | CustomerActivity, CustomerActivityType | list, by-id, type-list | create, update, delete, type-create, type-delete | App-first |
+| **product-subscription** | ProductSubscription | list, detail | delete | App-first |
+| **customer-product-number** | CustomerProductNumber | list | create, delete, import | App-first |
+| **customer** | (A2 `Customer`) | search, last-orders (→A1 Order), prices (→A3) | – | Core (Entity) / App-first (B2B-Queries) |
+| **customer-sales-ranking** | SalesRankingEntry | list | – | App-first |
+| **product-table-listing** | (nutzt Core `Product`) | list (B2B-Listing) | – | App-first → bindet an Core-Product |
+| **pdp-variant-list** | (nutzt Core `ProductVariant`) | list | – | App-first → bindet an Core-ProductVariant |
+| **event-product** | (nutzt Core `Product`) | list | – | App-first |
+| **spare-parts** | (nutzt Core `Product`) | similar-products | – | App-first |
+| **product-request** | – | – | send | App-first |
+| **sales-representative** | – | – | fast-order | App-first |
+| **misc** | – | delivery-intervals, payment-conditions, sales-statistics | account-request | App-first (z. T. evtl. Nicht-Orchestr-Utilities) |
+| **platform-cms** | (ggf. Core Page/CMS-Typ) | get | – | Core prüfen / App-first |
+| **snippets** | – | get | – | App-first (Util) |
+| **login-targets** | – | list | – | App-first |
 
-### 7. Einheitliches Criteria-Input-Schema
-Die `(Criteria)`-Endpunkte (search, *list, variant-list, budget orders-filtered)
-brauchen ein gemeinsames, getyptes Shopware-`Criteria`-Zod-Schema
-(filter/sort/associations/aggregations/pagination). Aktuell `ShopwareCriteria`
-(lose) in `server/types/shared.ts`.
+---
 
-## Verifizierungs-Lücken (mangels Live-Tenant)
-- **Wire-Shapes** der DTOs sind best-effort, nicht gegen einen echten
-  Tenant/OpenAPI-Export verifiziert. Vor Token-Definition gegen die echte
-  B2B-Sellers-Plugin-Doku/OpenAPI gegenprüfen.
-- **Pfad-Präfixe**: `/store-api/*` vs. `/b2b/*` als volle Pfade gegen baseURL =
-  Shop-Origin. Gegen eine reale Instanz testen (insb. die `/b2b/*`-Auth).
-- **HTTP-Methoden** einzelner Endpunkte (z. B. PUT vs. PATCH bei update vs.
-  patch) gegen die Plugin-Routen verifizieren.
+## C. Orchestr-Mechanik, die je Entity zusätzlich fehlt
 
-## Getroffene Entscheidungen (dieser Session)
-- **Paketname** `@laioutr/app-b2bsellers` (Konvention wie `@laioutr/app-actindo`).
-- **Client** `@shopware/api-client` (SDK) statt ofetch — auf Wunsch; kein
-  `rawRequest` → eigener `B2bSellersOperations`-Typ + `invoke`.
-- **Scope**: Foundation + queries-Layer; Orchestr-Handler verschoben (dieses Doc).
+Pro renderbarer Entity (employee, offer, cost-center, budget, order-approval,
+product-list, customer-activity, order, customer, …):
+
+1. **`defineEntityComponentToken`** + **Component-Resolver** (hydriert die von den Query-Handlern gelieferten IDs; inkl. Cache-Strategie).
+2. **DTO→Canonical-Mapper** (`server/*-helper/`) — Mapping der Wire-DTOs (`server/types/`) auf die Canonical-Component-Shapes.
+3. Erst dann sind die Query-Handler (binden an die Q-Tokens aus B) baubar; Action-Handler (A-Tokens) sind self-contained und können ohne Entity/Resolver gebaut werden, sobald die Action-Tokens existieren.
+
+---
+
+## D. Plattform-Hinweis: `initializePlatform`
+
+> B2B Sellers nutzt ein **eigenes Addon zur Plattform-Initialisierung**
+> (`initializePlatform`). Um **Versionskonflikte mit dem standardmäßigen
+> Shopware-Storefront-Core** zu vermeiden, wird empfohlen, diese
+> Initialisierungs-Logik **manuell in das lokale Frontend-Projekt zu kopieren**
+> (statt sie aus dem Standard-Storefront-Core zu beziehen).
+
+→ Offen für die Core-Session: Soll diese Init-Logik (a) im lokalen Frontend
+gepflegt, (b) als App-seitige Variante gekapselt oder (c) im Core
+versions-kompatibel gemacht werden? Bis dahin: **manuelle Kopie ins
+Frontend-Projekt** als Workaround dokumentieren.
+
+---
+
+## E. Verifizierungs-Lücken (kein Live-Tenant)
+
+Vor der finalen Token-/Entity-Definition gegen die **echte B2B-Sellers-Plugin-
+OpenAPI / eine reale Instanz** gegenprüfen:
+- Wire-Shapes der DTOs (Felder/Optionalität) — aktuell best-effort.
+- HTTP-Methoden einzelner Endpunkte (PUT vs. PATCH bei update/patch).
+- Pfad-Präfixe `/store-api/*` vs. `/b2b/*` gegen baseURL = Shop-Origin, insb. die `/b2b/*`-Auth.
+
+---
+
+## F. Was diese App schon mitbringt (Referenz, nicht Custom-Canonical)
+
+- Backend-only-Modul (`module.ts`), `APP_CONFIG_KEY`, Cookie-Key.
+- SDK-Client `@shopware/api-client` (`createAPIClient<B2bSellersOperations>`), `useB2bSellersClient` (Nitro-Auto-Import).
+- Middleware `defineB2bSellers` (`context.client` + Binder-Exports — definiert **keine** Tokens).
+- Wire-DTO-Typen (`server/types/`) + token-freie `queries/`-Schicht (92 `invoke`-Wrapper).
+
+Diese Schicht bleibt als **Beispiel-Surface** bestehen; die eigentlichen
+Handler entstehen, sobald die Bausteine aus A–C im Core (bzw. App-first lt. CTO)
+vorliegen.
