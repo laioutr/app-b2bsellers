@@ -1,0 +1,68 @@
+{
+  "globalSections": {},
+  "pages": {
+    "page_home": {
+      "id": "page_home",
+      "path": "/",
+      "type": "core/home",
+      "queries": {},
+      "variants": {
+        "page_home_v1": {
+          "id": "page_home_v1",
+          "seo": {
+            "title": { "en": "Home" },
+            "description": { "en": "" }
+          },
+          "studio": { "label": "Home" },
+          "queries": {},
+          "sections": {
+            "body": {},
+            "footer": {},
+            "header": {}
+          }
+        }
+      }
+    }
+  },
+  "apps": [],
+  "laioutr": {
+    "projectSecretKey": "ci-mock-project-secret-key",
+    "projectSlug": "ci/ci",
+    "environmentName": "main"
+  },
+  "markets": {
+    "mkt_default": {
+      "id": "mkt_default",
+      "slug": "default",
+      "name": "Default",
+      "currency": "EUR",
+      "regionCodes": [],
+      "defaultDomainId": "dom_default",
+      "domains": {
+        "dom_default": {
+          "id": "dom_default",
+          "host": "ci.local.laioutr.tech",
+          "path": "",
+          "languageId": "lng_en"
+        }
+      },
+      "studio": { "flag": "default" }
+    }
+  },
+  "version": 6,
+  "templates": {
+    "pages": {},
+    "blocks": {},
+    "sections": {},
+    "sharedSections": {}
+  },
+  "languages": {
+    "lng_en": {
+      "id": "lng_en",
+      "code": "en",
+      "name": "English",
+      "fallbacks": [],
+      "domains": []
+    }
+  }
+}
