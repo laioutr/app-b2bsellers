@@ -1,13 +1,4 @@
-<!--
-Get your module up and running quickly.
-
-Find and replace all on all files (CMD+SHIFT+F):
-- Name: My Laioutr App
-- Package name: my-laioutr-app
-- Description: My new Laioutr App
--->
-
-# My Laioutr App
+# B2B Sellers App for Laioutr
 
 [![Laioutr][laioutr-src]][laioutr-href]
 [![npm version][npm-version-src]][npm-version-href]
@@ -15,21 +6,22 @@ Find and replace all on all files (CMD+SHIFT+F):
 [![License][license-src]][license-href]
 [![Nuxt][nuxt-src]][nuxt-href]
 
-My new [Laioutr](https://laioutr.com) App for doing amazing things using Nuxt.
+A [Laioutr](https://laioutr.com) App for integrating **B2B Sellers** into the Laioutr platform.
+
+This repository is the integration starting point — it ships the module scaffold, CI and
+release pipeline, but no business logic yet. The connector implementation is added on top.
 
 See [laioutr.com](https://laioutr.com) for more information about Laioutr.
 
 - [✨ &nbsp;Release Notes](/CHANGELOG.md)
-  <!-- - [🏀 Online playground](https://stackblitz.com/github/your-org/my-laioutr-app?file=playground%2Fapp.vue) -->
   <!-- - [📖 &nbsp;Documentation](https://example.com) -->
 
 ## Features
 
-<!-- Highlight some of the features your module provide here -->
+<!-- Highlight the features this app provides here as the integration grows. -->
 
-- ⛰ &nbsp;Foo
-- 🚠 &nbsp;Bar
-- 🌲 &nbsp;Baz
+- 🔌 &nbsp;Wired into the storefront via [Orchestr](https://docs.laioutr.io) handlers
+- 🧱 &nbsp;Sections & blocks scaffold ready for B2B Sellers content
 
 ## Quick Setup
 
@@ -40,7 +32,7 @@ Before installing dependencies, you need to create a copy of the `.npmrc.config`
 - `pnpm dev:prepare`
 - `pnpm orchestr-dev`
 
-That's it! You can now use My Laioutr App in your [Laioutr Frontend](https://laioutr.com) ✨
+That's it! You can now use the B2B Sellers App in your [Laioutr Frontend](https://laioutr.com) ✨
 
 You can find a thorough guide on getting started with Laioutr development in our [developer guide](https://docs.laioutr.io/developer-guide/setup).
 
@@ -50,22 +42,15 @@ We use ESLint and Prettier to lint and format the code. This repository contains
 
 ## Publishing
 
-To publish a new version, run `pnpm release`. This will:
+Releases are managed with [Changesets](https://github.com/changesets/changesets) and published to npmjs.org automatically by the `release` workflow.
 
-- Run the tests
-- Update the changelog
-- Publish the package to npmjs.org
-- Push the changes to the repository
+To ship a change:
 
-### Private publishing
+1. In your PR, run `pnpm changeset` and follow the prompt to record the change and the version bump (patch/minor/major). Commit the generated file in `.changeset/`.
+2. Merge the PR to `main`. The release workflow opens (or updates) a **"Version Packages"** PR that applies the pending changesets to the version and `CHANGELOG.md`.
+3. Merge the "Version Packages" PR. The workflow builds the package and publishes it to npmjs.org, tags the commit, and creates a GitHub release.
 
-If you want to publish a private package to npm.laioutr.cloud, you need to:
-
-1. Make sure you have a `.npmrc` with your private npm registry token.
-2. Add this line to the root of the `package.json` file: `"publishConfig": { "registry": "https://npm.laioutr.cloud/" }`
-3. Make sure your package-name follows the `@laioutr-org/<organization-slug>_<package-name>` format.
-
-After that you can run `pnpm release` to publish the package to npm.laioutr.cloud.
+Publishing uses [npm OIDC trusted publishing](https://docs.npmjs.com/trusted-publishers), so no npm token is stored in the repository — the workflow needs `id-token: write` and a trusted publisher configured for the package on npmjs.org.
 
 ## Contribution
 
@@ -73,12 +58,12 @@ Follow the [setup guide](https://docs.laioutr.io/developer-guide/setup) to get s
 
 <!-- Badges -->
 
-[npm-version-src]: https://img.shields.io/npm/v/my-laioutr-app/latest.svg?style=flat&colorA=020420&colorB=00DC82
-[npm-version-href]: https://npmjs.com/package/my-laioutr-app
-[npm-downloads-src]: https://img.shields.io/npm/dm/my-laioutr-app.svg?style=flat&colorA=020420&colorB=00DC82
-[npm-downloads-href]: https://npm.chart.dev/my-laioutr-app
-[license-src]: https://img.shields.io/npm/l/my-laioutr-app.svg?style=flat&colorA=020420&colorB=00DC82
-[license-href]: https://npmjs.com/package/my-laioutr-app
+[npm-version-src]: https://img.shields.io/npm/v/@laioutr/app-b2bsellers/latest.svg?style=flat&colorA=020420&colorB=00DC82
+[npm-version-href]: https://npmjs.com/package/@laioutr/app-b2bsellers
+[npm-downloads-src]: https://img.shields.io/npm/dm/@laioutr/app-b2bsellers.svg?style=flat&colorA=020420&colorB=00DC82
+[npm-downloads-href]: https://npm.chart.dev/@laioutr/app-b2bsellers
+[license-src]: https://img.shields.io/npm/l/@laioutr/app-b2bsellers.svg?style=flat&colorA=020420&colorB=00DC82
+[license-href]: https://npmjs.com/package/@laioutr/app-b2bsellers
 [nuxt-src]: https://img.shields.io/badge/Nuxt-020420?logo=nuxt.js
 [nuxt-href]: https://nuxt.com
 [laioutr-src]: https://img.shields.io/badge/%F0%9F%A6%99_Laioutr_App-702DCE
