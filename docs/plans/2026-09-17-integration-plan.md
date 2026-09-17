@@ -10,6 +10,48 @@ repository**.
 
 Target: the Hamburg appointment on **2026-10-05**.
 
+## Where this stands — 2026-09-17, end of session
+
+Branch `feat/LAIOUTR-119-store-api-verification`, four commits on top of PR #3's head (`a0838d2`),
+**not pushed**. Working tree clean. `pnpm lint` and `pnpm test` pass; `vue-tsc` reports four errors
+that are byte-identical to the base branch and are not run by CI at all.
+
+```
+f911a4e  chore: configure the jira MCP server for this repository
+046dcbc  docs: record the Store-API verification against the live demo shop
+bb2b04c  fix(store-api): correct the operations map against the live shop and add a session
+bb1b203  chore(scripts): add an OpenAPI verification script for the operations map
+```
+
+Done:
+
+- Phase 2 is finished. The map was verified against the live demo shop and corrected: 24 → 74 `OK`,
+  zero `PATH_MISSING`, zero `WRONG_METHOD`. Evidence and the residue in
+  `docs/reviews/2026-09-17-store-api-verification.md`.
+- The authentication gap is closed: `login` / `logout` / `getContext` / `getCurrentCustomer` exist,
+  and the client persists the rotated `sw-context-token` through the SDK's `onContextChanged` hook.
+- `laioutrrc.json` holds the demo shop's endpoint and access key in the same shape Cockpit generates
+  for Vercel. Gitignored, so it survives nothing but the local disk — refetch or re-enter it if the
+  checkout moves.
+
+Next, in order:
+
+1. **Push the branch.** This updates PR #3, which Marcel is reading, so its description needs
+   rewriting first: what was verified against the live shop, what was not, and the three questions
+   below.
+2. **Create the two Jira issues under `LAIOUTR-119`** and close them against `bb2b04c` — the
+   operations-map correction and the authentication work. The `jira` MCP server is configured but
+   only loads at session start, so this needs a restarted session.
+3. **Ask Marcel and the CTO** the three questions at the end of the verification report. They are
+   sentences, not tickets: the plugin version the demo will run, the provenance of the eight
+   non-existent operations, and the package namespace.
+4. **Then phase 3 in `app-boltze`** — the connector can now authenticate and reach real data, which
+   is what blocked it.
+
+Loose end, deliberately untouched: section F of `REQUIREMENTS-ORCHESTR.md` still says "92 invoke
+wrappers" and that there is no Orchestr layer. The first is now wrong (90, plus auth); the second is
+still true.
+
 ## What this repository is, and who consumes it
 
 A pure backend/data integration wrapping the B2B Sellers Store API (a Shopware 6 plugin). No
