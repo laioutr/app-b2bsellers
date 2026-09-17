@@ -187,10 +187,16 @@ type EmployeeBudgetOperations = {
   >;
 };
 
-// ── order-approval: list/create on /store-api, the rest on /store-api/b2b ──
+// ── /store-api/b2b: order-approval ────────────────────────────────────────
+// Both the OpenAPI document and the vendor documentation place `list` and
+// `create` on the plain `/store-api/order-approval/...` path. The shop answers
+// 404 there and serves them under `/b2b/` like the rest of the domain, so the
+// live shop wins. Checked 2026-09-17.
 type OrderApprovalOperations = {
-  'listOrderApprovals post /store-api/order-approval/list': { body?: ShopwareCriteria } & Ok<ShopwareListResponse<OrderApproval>>;
-  'createOrderApproval post /store-api/order-approval/create': { body: { cartToken: string; customerComment?: string } } & Ok<OrderApproval>;
+  'listOrderApprovals post /store-api/b2b/order-approval/list': { body?: ShopwareCriteria } & Ok<ShopwareListResponse<OrderApproval>>;
+  'createOrderApproval post /store-api/b2b/order-approval/create': { body: { cartToken: string; customerComment?: string } } & Ok<
+    OrderApproval
+  >;
   'getOrderApproval get /store-api/b2b/order-approval/{orderApprovalId}': { pathParams: { orderApprovalId: string } } & Ok<OrderApproval>;
   'orderApprovalActivity get /store-api/b2b/order-approval/{orderApprovalId}/activity': {
     pathParams: { orderApprovalId: string };

@@ -1,9 +1,10 @@
 /**
- * Order-approval endpoints of the B2B Sellers Store API.
+ * Order-approval endpoints of the B2B Sellers Store API (`/store-api/b2b/...`).
  *
- * Listing and creating are plain core routes; everything that addresses a
- * single approval is a company route under `/store-api/b2b/...`. The API names
- * the path parameter `orderApprovalId` — these wrappers take a plain `id`.
+ * The whole domain lives under `/b2b/`, including `list` and `create` — both
+ * the OpenAPI document and the vendor documentation place those two on the
+ * plain path, where the shop answers 404. The API names the path parameter
+ * `orderApprovalId`; these wrappers take a plain `id`.
  *
  * Several routes have required bodies (`decline` needs a comment, `remind` an
  * approver, the line-item routes a quantity/reason); the signatures below make
@@ -13,11 +14,11 @@ import type { B2bSellersClient } from '../client/b2bSellersClient';
 import type { ShopwareCriteria } from '../types';
 
 export function listOrderApprovals(client: B2bSellersClient, body: ShopwareCriteria = {}) {
-  return client.invoke('listOrderApprovals post /store-api/order-approval/list', { body });
+  return client.invoke('listOrderApprovals post /store-api/b2b/order-approval/list', { body });
 }
 
 export function createOrderApproval(client: B2bSellersClient, body: { cartToken: string; customerComment?: string }) {
-  return client.invoke('createOrderApproval post /store-api/order-approval/create', { body });
+  return client.invoke('createOrderApproval post /store-api/b2b/order-approval/create', { body });
 }
 
 export function getOrderApproval(client: B2bSellersClient, id: string) {
