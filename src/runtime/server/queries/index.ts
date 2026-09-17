@@ -1,3 +1,4 @@
+export * from './auth';
 export * from './customer';
 export * from './customer-activity';
 export * from './customer-sales-ranking';
@@ -5,7 +6,6 @@ export * from './employee';
 export * from './employee-order';
 export * from './offer';
 export * from './product-list';
-export * from './product-subscription';
 export * from './catalog-misc';
 export * from './cost-center';
 export * from './customer-product-number';

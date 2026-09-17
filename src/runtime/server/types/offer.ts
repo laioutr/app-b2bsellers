@@ -20,10 +20,3 @@ export interface Offer extends ShopwareAuditFields {
   price: ShopwareMoney | null;
   comment: string | null;
 }
-
-export interface OfferMailTemplate extends ShopwareAuditFields {
-  name: string;
-  subject: string;
-  contentHtml: string | null;
-  contentPlain: string | null;
-}
