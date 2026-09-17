@@ -60,10 +60,13 @@ The second is the stronger claim: a route can match the document and still 404.
 
 ## Features
 
-<!-- Highlight the features this app provides here as the integration grows. -->
+Backend only — a typed Store-API surface, not a storefront app. No Orchestr
+handlers, no sections, no blocks live here; the consumer (`app-boltze`) writes
+those and calls the client this module exposes.
 
-- 🔌 &nbsp;Wired into the storefront via [Orchestr](https://docs.laioutr.io) handlers
-- 🧱 &nbsp;Sections & blocks scaffold ready for B2B Sellers content
+- 🔌 &nbsp;89 typed Store-API operations with thin query wrappers, verified against a live shop
+- 🔑 &nbsp;Request-scoped client that holds a customer session (`useB2bSellersClient`), the secret server-side only
+- 🧪 &nbsp;Two verification scripts — one against the shop's OpenAPI document, one against the shop itself
 
 ## Quick Setup
 
