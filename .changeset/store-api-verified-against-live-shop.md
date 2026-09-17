@@ -13,6 +13,8 @@ match the shop:
 - customers, activities and statistics belong under `/store-api/sales-representative/` (11 operations)
 - four routes answer a different method, `delete` routes answer 200 rather than 204, and 23 path
   parameters carry different names (`{orderApprovalId}`, `{BudgetId}`, `{CostCenterId}`)
+- order-approval `list` and `create` are served from `/b2b/` as well, although both the document and
+  the vendor documentation place them on the plain path — where the shop answers 404
 
 Eight operations that the installed version does not serve were removed: the three
 product-subscription routes, `deliveryIntervals`, `paymentConditions`, `listEventProducts`,

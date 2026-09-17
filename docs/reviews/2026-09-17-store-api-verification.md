@@ -99,7 +99,7 @@ Proven live: `POST /store-api/b2b/employees` → 403, `POST /store-api/employees
 Correct as written, confirmed against all three sources: `pdpVariantList`
 (`/store-api/variant-list/{productId}` — the vendor annotated this route with its full path, so it
 appears in the document as `/store-api/variant-list/...`; the live shop answers 400 there, 404 on the
-doubled prefix), `listOrderApprovals`, `createOrderApproval`, `listBudgets`, `createBudget`,
+doubled prefix), `listBudgets`, `createBudget`,
 `budgetOrders`, `budgetOrdersFiltered`, `budgetPeriodTypes`, `customerPrices`,
 `productTableListing`, `accountRequest`, `salesRepFastOrder`, `convertOfferToOrder`, `sendOfferMail`,
 `listOffers`, `getOffer`, `listProductLists`, `createProductList`, `updateProductList`.
@@ -122,6 +122,24 @@ offer is `PUT /store-api/offer/{id}`.
 The v4 docs list `GET /budget-approval-employees`. The installed shop returns 404 for it and 403 for
 `/store-api/b2b/order-approval/budget-approval-employees`. The published docs describe a version the
 shop does not run. This is the concrete reason the plugin version matters.
+
+### And where *both* sources disagree with the shop: order-approval `list` and `create`
+
+Found by the smoke test after this report was first written, and fixed in `5edd4bc`. The OpenAPI
+document carries them as `/order-approval/list` and `/order-approval/create` — the only two
+order-approval keys in the whole document that are not under `/b2b/` — and the vendor documentation
+agrees. The shop does not:
+
+```
+POST /store-api/order-approval/list        → 404
+POST /store-api/b2b/order-approval/list    → 401   (exists; needs a customer session)
+POST /store-api/order-approval/create      → 404
+POST /store-api/b2b/order-approval/create  → 401
+```
+
+Two sources agreeing with each other and disagreeing with the shop. The shop wins, so the map serves
+both from `/b2b/`, and `verify-openapi.mjs` carries the pair in `KNOWN_DOCUMENT_ERRORS` so that a
+later run against the document cannot talk anyone into moving them back onto a path that 404s.
 
 ## Two defects in the checker itself, found while fixing the map
 
@@ -164,7 +182,13 @@ export SHOPWARE_SHOP_URL=https://laioutr.demoshop.b2b-sellers.com
 export SHOPWARE_ACCESS_KEY="$(node -p "require('./laioutrrc.json').apps[0].config.accessToken")"
 node scripts/verify-openapi.mjs --save=openapi3.json
 node scripts/verify-openapi.mjs --spec=openapi3.json --fields   # offline, response fields
+node scripts/smoke-store-api.mjs                                # calls the shop, read-only
 ```
+
+`verify-openapi.mjs` compares the map with a document; `smoke-store-api.mjs` calls the shop, which is
+the stronger claim — a route can match the document and still 404, as `list` and `create` above did.
+It skips every mutating operation by name, and with `--user` / `--password` it logs in and reads real
+data. Last run, 2026-09-17: 90 operations, 3 public, 27 waiting on a session, **0 path missing**.
 
 `laioutrrc.json` is gitignored and carries the shop config in the same shape Cockpit generates for
 Vercel. Exit 0 clean, 1 mismatches, 2 could not run.

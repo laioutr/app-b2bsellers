@@ -12,11 +12,14 @@ Target: the Hamburg appointment on **2026-10-05**.
 
 ## Where this stands — 2026-09-17, end of session
 
-Branch `feat/LAIOUTR-119-store-api-verification`, four commits on top of PR #3's head (`a0838d2`),
+Branch `feat/LAIOUTR-119-store-api-verification`, seven commits on top of PR #3's head (`a0838d2`),
 **not pushed**. Working tree clean. `pnpm lint` and `pnpm test` pass; `vue-tsc` reports four errors
 that are byte-identical to the base branch and are not run by CI at all.
 
 ```
+5edd4bc  fix(store-api): serve order-approval list and create from /b2b
+d298b44  chore(scripts): smoke-test the operations map against a real shop
+475e1e6  docs: record where the B2B Sellers integration stands
 f911a4e  chore: configure the jira MCP server for this repository
 046dcbc  docs: record the Store-API verification against the live demo shop
 bb2b04c  fix(store-api): correct the operations map against the live shop and add a session
@@ -30,18 +33,37 @@ Done:
   `docs/reviews/2026-09-17-store-api-verification.md`.
 - The authentication gap is closed: `login` / `logout` / `getContext` / `getCurrentCustomer` exist,
   and the client persists the rotated `sw-context-token` through the SDK's `onContextChanged` hook.
+- A second pass with `scripts/smoke-store-api.mjs` — which calls the shop rather than reading its
+  document — found the last 404: order-approval `list` and `create` are served from `/b2b/` too,
+  against what both the document and the vendor docs say. Fixed in `5edd4bc`; every reachable
+  operation now answers.
 - `laioutrrc.json` holds the demo shop's endpoint and access key in the same shape Cockpit generates
   for Vercel. Gitignored, so it survives nothing but the local disk — refetch or re-enter it if the
   checkout moves.
+
+## Jira
+
+The delivery breakdown lives in `DEV`, under epic **DEV-490** — "B2B Sellers for Shopware — Boltze
+shop and iPad sales app". `LAIOUTR-119` is the discovery idea above it and stays in *Delivery* until
+the Hamburg appointment; it is not the ticket to close for this branch.
+
+Mine under that epic:
+
+| Issue | | |
+| --- | --- | --- |
+| DEV-494 | Access to a live B2B Sellers shop | shop URL and access key are in place, **a B2B customer login is not** — 27 operations answer 403 and cannot be read without one |
+| DEV-495 | Verify the Store-API wrappers against the shop's OpenAPI document | done on this branch |
+| DEV-506 | Give the connector a customer session | done on this branch |
+| DEV-496 | Merge PR #3 | waits on the push below |
+| DEV-497 | Publish `app-boltze` and install it in both projects | not started |
 
 Next, in order:
 
 1. **Push the branch.** This updates PR #3, which Marcel is reading, so its description needs
    rewriting first: what was verified against the live shop, what was not, and the three questions
-   below.
-2. **Create the two Jira issues under `LAIOUTR-119`** and close them against `bb2b04c` — the
-   operations-map correction and the authentication work. The `jira` MCP server is configured but
-   only loads at session start, so this needs a restarted session.
+   below. DEV-496 closes when it merges.
+2. **Get a B2B customer login for the demo shop** — the open half of DEV-494. Everything the
+   connector actually reads sits behind 403 until then, so no wrapper has yet returned real data.
 3. **Ask Marcel and the CTO** the three questions at the end of the verification report. They are
    sentences, not tickets: the plugin version the demo will run, the provenance of the eight
    non-existent operations, and the package namespace.
