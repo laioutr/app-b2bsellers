@@ -9,8 +9,14 @@
 import type { B2bSellersClient } from '../client/b2bSellersClient';
 import type { ShopwareCriteria } from '../types';
 
-export function listCustomerActivity(client: B2bSellersClient, query: ShopwareCriteria = {}) {
-  return client.invoke('listCustomerActivity get /store-api/sales-representative/customer-activity/list', { query });
+/**
+ * A page of customer activity. `POST`, despite the other read routes here being
+ * `GET`: as a `GET` the shop resolves the path against
+ * `/customer-activity/{customerActivityId}` and rejects the literal `list` as a
+ * malformed UUID.
+ */
+export function listCustomerActivity(client: B2bSellersClient, body: ShopwareCriteria = {}) {
+  return client.invoke('listCustomerActivity post /store-api/sales-representative/customer-activity/list', { body });
 }
 
 export function getCustomerActivity(client: B2bSellersClient, customerActivityId: string) {
@@ -40,12 +46,8 @@ export function listCustomerActivityTypes(client: B2bSellersClient) {
   return client.invoke('listCustomerActivityTypes get /store-api/sales-representative/customer-activity-type');
 }
 
-export function listCustomerActivityType(client: B2bSellersClient) {
-  return client.invoke('listCustomerActivityType get /store-api/sales-representative/customer-activity-type/list');
-}
-
 export function getCustomerActivityType(client: B2bSellersClient, customerActivityTypeId: string) {
-  return client.invoke('getCustomerActivityType post /store-api/sales-representative/customer-activity-type/{customerActivityTypeId}', {
+  return client.invoke('getCustomerActivityType get /store-api/sales-representative/customer-activity-type/{customerActivityTypeId}', {
     pathParams: { customerActivityTypeId },
   });
 }

@@ -157,6 +157,96 @@ while every other key is relative. Prefixing it again yields `/store-api/store-a
 shop answers with 404 — the map was right all along, and the checker now treats an already-absolute
 key as absolute.
 
+## With a session — what the map does once it can read
+
+The demo shop publishes its own test accounts at `/Benutzeruebersicht/`, which is what unblocked
+this. The sales app signs in as the **Vertriebsmitarbeiter** `m.sommer@luxon.de` (Supervisor, all
+rights); `henk.becker@ektek.com` is a B2B administrator and `c.wagner@web.de` a private customer with
+no platform access, both useful for testing what should be refused.
+
+```bash
+node scripts/smoke-store-api.mjs --user=m.sommer@luxon.de --password=<published on that page>
+```
+
+27 operations answer with real data — 17 employees, 10 employee roles, 15 permissions, 3 cost
+centers, 12 sales-representative customers, 5 last orders, 19 statistics rows, 10 activity types, 5
+offer states. `zero needs-session`, so every route the connector reaches is now reachable in fact and
+not only in principle.
+
+### Six defects only a session could expose
+
+A 403 hides everything behind it, so these could not have been found before:
+
+| Operation | | |
+| --- | --- | --- |
+| `listCustomerActivityType` | 404 | `/sales-representative/customer-activity-type/list` does not exist — the bare `…/customer-activity-type` does, and answers 10 items |
+| `getEmployee` | 404 | `/b2b/employee/{id}` does not exist, although `/b2b/employees` lists 17 of them |
+| `myEmployeeBudgets` | **500** | `/b2b/employee-budget` — a shop-side error, not a bad request. Worth reporting to the vendor |
+| `productTableListing` | 400 | requires parameters the probe does not send; the required body is undocumented |
+| `searchCustomers` | 400 | same shape — `/sales-representative/customer-search` needs a documented query |
+| `listCustomerActivity` | 400 | same shape |
+
+The three 400s are probably "the map declares the body optional where the route requires it", which is
+exactly the class of defect the OpenAPI document could not settle — it omits those request bodies
+altogether. They need one authenticated call each with a real payload to pin down.
+
+## Writing is a different story: offers cannot be built through the Store API here
+
+Reading the shop works. Creating the data a sales demo needs does not, and the reason is not one
+missing parameter — three independent routes into an offer are each closed, by different doors.
+Established 2026-09-17 against the live shop with a representative session.
+
+**1. `POST /offer` works; nothing may then be put on the offer.**
+
+The document spells the route `/offer/` with a trailing slash, which 404s — the shop serves
+`/store-api/offer`. With that corrected, creating an offer succeeds and the shop assigns its own
+number (1136–1141 were created this way). Adding products then fails:
+
+```
+POST /store-api/offer-add-products/{id}   → 403 B2B_OFFER__UPDATE_DENIED
+PUT  /store-api/offer/{id}                → 405 Method Not Allowed
+```
+
+`B2B_OFFER__UPDATE_DENIED` is **not** about the offer's state: the offer was walked through all five
+states the shop returns and answered 403 in every one. And the state cannot be changed anyway,
+because the documented update route does not accept `PUT` on this installation. So an offer created
+through this route is permanently empty.
+
+Two further corrections to the document while there: `number` is **required** (it is marked optional;
+without it the shop answers `VIOLATION::IS_BLANK_ERROR` at `/number`), and `offer-add-products` takes
+`lineItems`, not the `object` the schema names.
+
+**2. `POST /offer-request` — the cart-to-offer route — is refused for every account tried.**
+
+```
+403 B2B_OFFER__PERMISSION_DENIED  "The customer does not have the needed permission for this offer."
+```
+
+Tried as a B2B employee and as a B2B administrator, the account the shop's own page describes as
+holding user-management rights. **No employee permission governs offers**: the installed version
+exposes 15, and they cover budget rules, addresses, prices, documents, orders, categories and
+customer data — none of them offers. So this is a plugin or sales-channel setting in the Shopware
+admin, not something a Store-API caller can grant itself.
+
+**3. The sales channel sells one product.**
+
+`POST /store-api/product` on the channel our access key belongs to (`Headless`,
+`98432def39fc4624b33213a56b8c944d`) returns **one** article: `SW10129 "Custom offer product"`.
+Everything on the existing orders belongs to a different channel (`ee0ad685…`) and the cart refuses
+it with `product-not-found`. So even a working offer route would produce offers containing a single
+generic placeholder.
+
+### What that needs, and from whom
+
+None of this is API work. Someone with Shopware admin on the demo shop has to either:
+
+- assign the product catalogue and its visibility to the `Headless` sales channel, and enable the
+  offer module for the B2B customers on it — or
+- hand over the access key of the sales channel that already carries the catalogue
+  (`ee0ad685d0504d5f80730d9b53f794c8`, the one the existing orders were placed on).
+
+The second is the cheaper of the two if that channel has the B2B plugin active.
+
 ## The blocker that is not about paths
 
 Every B2B route answers **403 without a customer session** — including `/store-api/offer/list`.

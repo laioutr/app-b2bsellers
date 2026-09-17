@@ -267,8 +267,15 @@ type SalesRepCustomerOperations = {
 // ── /store-api/sales-representative: customer-activity ────────────────────
 // The type routes read oddly but match the shop: a GET lists the types, and a
 // POST on `/{customerActivityTypeId}` loads one. There is no create or delete.
+//
+// `listCustomerActivity` is a POST, not a GET. As a GET the shop matches it
+// against `/customer-activity/{customerActivityId}` and answers
+// `400 FRAMEWORK__INVALID_UUID: Value is not a valid UUID: list` — the literal
+// `list` being read as an id. Verified 2026-09-17 with a customer session; a
+// session is what it took, since an unauthenticated call is refused before the
+// route is ever resolved.
 type CustomerActivityOperations = {
-  'listCustomerActivity get /store-api/sales-representative/customer-activity/list': { query?: ShopwareCriteria } & Ok<
+  'listCustomerActivity post /store-api/sales-representative/customer-activity/list': { body?: ShopwareCriteria } & Ok<
     ShopwareListResponse<CustomerActivity>
   >;
   'getCustomerActivity get /store-api/sales-representative/customer-activity/{customerActivityId}': {
@@ -281,12 +288,13 @@ type CustomerActivityOperations = {
   } & Ok<Record<string, unknown>>;
 };
 
+// `listCustomerActivityType` (`/customer-activity-type/list`) was here and is
+// gone: the shop answers 404 for it under a valid session, while the bare
+// `/customer-activity-type` above returns all ten types. Two entries for one
+// route, one of which does not exist.
 type CustomerActivityTypeOperations = {
   'listCustomerActivityTypes get /store-api/sales-representative/customer-activity-type': Ok<ShopwareListResponse<CustomerActivityType>>;
-  'listCustomerActivityType get /store-api/sales-representative/customer-activity-type/list': Ok<
-    ShopwareListResponse<CustomerActivityType>
-  >;
-  'getCustomerActivityType post /store-api/sales-representative/customer-activity-type/{customerActivityTypeId}': {
+  'getCustomerActivityType get /store-api/sales-representative/customer-activity-type/{customerActivityTypeId}': {
     pathParams: { customerActivityTypeId: string };
   } & Ok<CustomerActivityType>;
 };

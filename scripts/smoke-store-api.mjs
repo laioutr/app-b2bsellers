@@ -107,7 +107,7 @@ const ID_SOURCE = {
   orderApprovalActivity: 'listOrderApprovals',
   orderApprovalApprovers: 'listOrderApprovals',
   getCustomerActivity: 'listCustomerActivity',
-  getCustomerActivityType: 'listCustomerActivityType',
+  getCustomerActivityType: 'listCustomerActivityTypes',
 };
 
 const OPERATION_LINE = /^\s*'([A-Za-z0-9_]+) (get|post|put|patch|delete) (\/[^']*)':/gm;
