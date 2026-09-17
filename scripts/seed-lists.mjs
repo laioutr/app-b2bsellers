@@ -32,6 +32,7 @@ const argv = process.argv.slice(2);
 const mode = argv.find((a) => ['--check', '--seed', '--delete'].includes(a));
 const opt = (name, dflt) => argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? dflt;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const log = (...a) => process.stdout.write(`\n`);
 const fail = (m) => {
   process.stderr.write(`${m}\n`);
   process.exit(2);
@@ -67,23 +68,23 @@ async function main() {
     const r = await call('POST', '/store-api/account/login', { username: user, password });
     if (r.status === 200) break;
     if (r.code === 'CHECKOUT__CUSTOMER_AUTH_THROTTLED' && a <= 5) {
-      console.log(`  login throttled, waiting ${a * 60}s`);
+      log(`  login throttled, waiting ${a * 60}s`);
       await sleep(a * 60_000);
       continue;
     }
     fail(`login failed: ${r.status} ${r.code ?? ''}`);
   }
-  console.log(`signed in as ${user}\n`);
+  log(`signed in as ${user}\n`);
 
   const listId = (l) => (Array.isArray(l.id) ? l.id[0] : l.id);
   const myLists = async () => (await call('POST', '/store-api/product-lists', { limit: 100 })).json?.elements ?? [];
   const products = (await call('POST', '/store-api/product', { limit: 100 })).json?.elements ?? [];
 
   if (mode === '--check') {
-    console.log(`sellable products on this channel: ${products.length} → ${products.map((p) => p.productNumber).join(', ')}`);
+    log(`sellable products on this channel: ${products.length} → ${products.map((p) => p.productNumber).join(', ')}`);
     const lists = await myLists();
-    console.log(`\nthis account's lists: ${lists.length}`);
-    for (const l of lists) console.log(`  ${l.name?.startsWith(PREFIX) ? '[demo]' : '     '} ${l.name}  · ${(l.items ?? []).length} items`);
+    log(`\nthis account's lists: ${lists.length}`);
+    for (const l of lists) log(`  ${l.name?.startsWith(PREFIX) ? '[demo]' : '     '} ${l.name}  · ${(l.items ?? []).length} items`);
     return;
   }
 
@@ -91,7 +92,7 @@ async function main() {
     for (const spec of LISTS) {
       const created = await call('POST', '/store-api/product-lists/create', { name: spec.name, type: spec.type });
       if (created.status !== 200) {
-        console.log(`FAIL create "${spec.name}": ${created.status} ${created.code ?? ''} ${created.detail ?? ''}`);
+        log(`FAIL create "${spec.name}": ${created.status} ${created.code ?? ''} ${created.detail ?? ''}`);
         continue;
       }
       const id = listId(created.json?.data ?? created.json);
@@ -101,10 +102,10 @@ async function main() {
         const r = await call('POST', `/store-api/product-lists/${id}/items`, { items: [{ productId: product.id, quantity: 1 + i }] });
         if (r.status === 200) added++;
       }
-      console.log(`OK  ${spec.name}  · ${added} item(s)`);
+      log(`OK  ${spec.name}  · ${added} item(s)`);
     }
     const after = (await myLists()).filter((l) => l.name?.startsWith(PREFIX));
-    console.log(`\n${after.length} LAIOUTR-DEMO lists now on the account.`);
+    log(`\n${after.length} LAIOUTR-DEMO lists now on the account.`);
     return;
   }
 
@@ -112,9 +113,9 @@ async function main() {
     const demo = (await myLists()).filter((l) => l.name?.startsWith(PREFIX));
     for (const l of demo) {
       const r = await call('DELETE', `/store-api/product-lists/${listId(l)}`);
-      console.log(`${r.status === 200 || r.status === 204 ? 'deleted' : `FAIL ${r.status}`}  ${l.name}`);
+      log(`${r.status === 200 || r.status === 204 ? 'deleted' : `FAIL ${r.status}`}  ${l.name}`);
     }
-    console.log(`\nremoved ${demo.length} LAIOUTR-DEMO lists.`);
+    log(`\nremoved ${demo.length} LAIOUTR-DEMO lists.`);
   }
 }
 

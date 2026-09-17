@@ -41,6 +41,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const log = (...a) => process.stdout.write(`\n`);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MARKER = 'LAIOUTR-DEMO';
 const mode = process.argv.find((a) => ['--check', '--seed', '--delete'].includes(a));
@@ -99,18 +100,18 @@ function adminClient(endpoint, token) {
 }
 
 async function check(api) {
-  console.log('admin key: OK\n');
+  log('admin key: OK\n');
   const channels = await api('POST', '/search/sales-channel', { associations: { products: { 'total-count-mode': 1, limit: 1 } }, limit: 25 });
-  console.log('sales channels:');
+  log('sales channels:');
   for (const c of channels.json?.data ?? []) {
     const name = c.attributes?.name ?? c.attributes?.translated?.name ?? c.id;
-    console.log(`  ${c.id}  ${name}`);
+    log(`  ${c.id}  ${name}`);
   }
   const products = await api('POST', '/search/product', { limit: 1, 'total-count-mode': 1 });
-  console.log(`\ntotal products in the shop: ${products.json?.meta?.total ?? '?'}`);
+  log(`\ntotal products in the shop: ${products.json?.meta?.total ?? '?'}`);
   const offers = await api('POST', '/search/b2b-sellers-offer', { limit: 1, 'total-count-mode': 1 }).catch(() => null);
-  if (offers?.status === 200) console.log(`total offers: ${offers.json?.meta?.total ?? '?'}`);
-  console.log('\nReady. Run --seed to create demo data, --delete to remove it.');
+  if (offers?.status === 200) log(`total offers: ${offers.json?.meta?.total ?? '?'}`);
+  log('\nReady. Run --seed to create demo data, --delete to remove it.');
 }
 
 async function main() {
@@ -118,15 +119,9 @@ async function main() {
   const conn = await connection();
   const api = adminClient(conn.endpoint, await adminToken(conn));
 
-  if (mode === '--check') return check(api);
-  if (mode === '--seed') {
-    console.log(`seeding (everything tagged ${MARKER}) — TODO once --check confirms the channel + catalogue layout`);
-    return;
-  }
-  if (mode === '--delete') {
-    console.log(`deleting everything tagged ${MARKER} — TODO, mirrors --seed`);
-    return;
-  }
+  if (mode === '--check') await check(api);
+  else if (mode === '--seed') log(`seeding (everything tagged ${MARKER}) — TODO once --check confirms the channel + catalogue layout`);
+  else if (mode === '--delete') log(`deleting everything tagged ${MARKER} — TODO, mirrors --seed`);
 }
 
 await main();
