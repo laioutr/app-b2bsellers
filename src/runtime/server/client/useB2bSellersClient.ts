@@ -1,17 +1,31 @@
 import { getCookie, type H3Event, setCookie } from 'h3';
 import { type B2bSellersClient, createB2bSellersClient } from './b2bSellersClient';
 import { useRuntimeConfig } from '#imports';
+import { type B2bSellersConfig, resolveConfigFromEnv, validateB2bSellersConfig } from '../config';
 import { APP_CONFIG_KEY } from '../const';
 import { CONTEXT_TOKEN_COOKIE, CONTEXT_TOKEN_MAX_AGE } from '../const/cookieKeys';
 
 /**
- * Runtime-config slice this module owns. The key mirrors the module
- * `configKey` (the package name). Kept local so this runtime util does not
- * import the build-time module definition.
+ * The validated connection, resolved once per process.
+ *
+ * Precedence: the project config injected into the runtime config wins; an empty
+ * field falls back to its environment variable (so a host that only has env vars
+ * still connects); then validation throws a readable error rather than letting
+ * an empty endpoint/key surface as an opaque 401 on the first shop call. Cached
+ * because it cannot change within a deployment — but only the *success* is
+ * cached, so a misconfiguration keeps failing loudly until it is fixed.
  */
-interface B2bSellersRuntimeConfig {
-  endpoint?: string;
-  accessToken?: string;
+let validated: B2bSellersConfig | undefined;
+function resolveConnection(event?: H3Event): B2bSellersConfig {
+  if (validated) return validated;
+  const injected = useRuntimeConfig(event)[APP_CONFIG_KEY] as Partial<B2bSellersConfig> | undefined;
+  const env = resolveConfigFromEnv();
+  const merged: B2bSellersConfig = {
+    endpoint: injected?.endpoint || env.endpoint,
+    accessToken: injected?.accessToken || env.accessToken,
+  };
+  validated = validateB2bSellersConfig(merged);
+  return validated;
 }
 
 /**
@@ -38,11 +52,11 @@ interface B2bSellersRuntimeConfig {
  * which case no session is attached and only public routes will answer.
  */
 export function useB2bSellersClient(event?: H3Event): B2bSellersClient {
-  const config = useRuntimeConfig(event)[APP_CONFIG_KEY] as B2bSellersRuntimeConfig | undefined;
+  const config = resolveConnection(event);
 
   const client = createB2bSellersClient({
-    baseUrl: config?.endpoint ?? '',
-    accessToken: config?.accessToken ?? '',
+    baseUrl: config.endpoint,
+    accessToken: config.accessToken,
     contextToken: event ? getCookie(event, CONTEXT_TOKEN_COOKIE) : undefined,
   });
 

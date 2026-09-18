@@ -1,8 +1,16 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 import { addServerImportsDir, createResolver, defineNuxtModule, installModule } from '@nuxt/kit';
 import { defu } from 'defu';
+import { configSchema, resolveConfigFromEnv } from './runtime/server/config';
 import { registerLaioutrApp } from '@laioutr-core/kit';
 import { name, version } from '../package.json';
+
+/**
+ * The app's config manifest. Re-exported here because the Laioutr CLI's
+ * `app release` imports `configSchema` from `src/module.ts` (via jiti) and stores
+ * it as the version's `definition`. Single source of truth in `runtime/server/config`.
+ */
+export { configSchema };
 
 /**
  * The options the module adds to the nuxt.config.ts.
@@ -48,11 +56,12 @@ export default defineNuxtModule<ModuleOptions>({
     version,
     configKey: name, // configKey must match package name
   },
-  // Default configuration options of the Nuxt module
-  defaults: {
-    endpoint: '',
-    accessToken: '',
-  },
+  // Default configuration options of the Nuxt module. The connection is normally
+  // delivered through the Laioutr project config (`laioutrrc.json` → this app's
+  // `config`); when that is absent — e.g. on a host where only environment
+  // variables are available — these env fallbacks fill it. Precedence:
+  // project config → environment → empty (then validation fails fast).
+  defaults: resolveConfigFromEnv(),
   async setup(_options, nuxt) {
     const { resolve } = createResolver(import.meta.url);
     const resolveRuntimeModule = (path: string) => resolve('./runtime', path);
