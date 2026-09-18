@@ -1,30 +1,23 @@
 import { getCookie, type H3Event, setCookie } from 'h3';
 import { type B2bSellersClient, createB2bSellersClient } from './b2bSellersClient';
 import { useRuntimeConfig } from '#imports';
-import { type B2bSellersConfig, resolveConfigFromEnv, validateB2bSellersConfig } from '../config';
+import { type AppConfig, resolveConnectionConfig } from '../config';
 import { APP_CONFIG_KEY } from '../const';
 import { CONTEXT_TOKEN_COOKIE, CONTEXT_TOKEN_MAX_AGE } from '../const/cookieKeys';
 
 /**
  * The validated connection, resolved once per process.
  *
- * Precedence: the project config injected into the runtime config wins; an empty
- * field falls back to its environment variable (so a host that only has env vars
- * still connects); then validation throws a readable error rather than letting
- * an empty endpoint/key surface as an opaque 401 on the first shop call. Cached
- * because it cannot change within a deployment — but only the *success* is
- * cached, so a misconfiguration keeps failing loudly until it is fixed.
+ * The generic handler applies the precedence (injected project config → env var
+ * → fail) and validates against the manifest; this only supplies the injected
+ * config and caches the success, so a misconfiguration keeps failing loudly
+ * until it is fixed rather than being cached.
  */
-let validated: B2bSellersConfig | undefined;
-function resolveConnection(event?: H3Event): B2bSellersConfig {
+let validated: AppConfig | undefined;
+function resolveConnection(event?: H3Event): AppConfig {
   if (validated) return validated;
-  const injected = useRuntimeConfig(event)[APP_CONFIG_KEY] as Partial<B2bSellersConfig> | undefined;
-  const env = resolveConfigFromEnv();
-  const merged: B2bSellersConfig = {
-    endpoint: injected?.endpoint || env.endpoint,
-    accessToken: injected?.accessToken || env.accessToken,
-  };
-  validated = validateB2bSellersConfig(merged);
+  const injected = useRuntimeConfig(event)[APP_CONFIG_KEY] as Partial<AppConfig> | undefined;
+  validated = resolveConnectionConfig(injected);
   return validated;
 }
 

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 import { addServerImportsDir, createResolver, defineNuxtModule, installModule } from '@nuxt/kit';
 import { defu } from 'defu';
-import { configSchema, resolveConfigFromEnv } from './runtime/server/config';
+import { configSchema, resolveDefaults } from './runtime/server/config';
 import { registerLaioutrApp } from '@laioutr-core/kit';
 import { name, version } from '../package.json';
 
@@ -61,7 +61,7 @@ export default defineNuxtModule<ModuleOptions>({
   // `config`); when that is absent — e.g. on a host where only environment
   // variables are available — these env fallbacks fill it. Precedence:
   // project config → environment → empty (then validation fails fast).
-  defaults: resolveConfigFromEnv(),
+  defaults: resolveDefaults(),
   async setup(_options, nuxt) {
     const { resolve } = createResolver(import.meta.url);
     const resolveRuntimeModule = (path: string) => resolve('./runtime', path);

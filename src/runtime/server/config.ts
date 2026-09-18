@@ -1,102 +1,76 @@
 /**
- * The app's configuration manifest — the single source of truth for its two
- * connection settings.
+ * The **generic config handler** — resolves and validates an app's config purely
+ * from its {@link AppConfigManifest}, with no knowledge of any particular field.
+ * It is written to be lifted into `@laioutr-core/kit` as a shared `defineAppConfig`
+ * so every app shares one implementation; here it is bound to this app's manifest.
  *
- * `configSchema` is re-exported from `src/module.ts`; the Laioutr CLI's
- * `app release` imports it (via jiti) and stores it as the version's
- * `definition` (see `app_versions.definition`), so the Cockpit can render a
- * settings form from it. The same field list drives the module's `defaults`
- * (from the environment) and the boot-time validation below, so a field is
- * declared in exactly one place.
- *
- * **The exact field-definition shape the Cockpit renders is not yet fixed**
- * (LAIOUTR-94 / PR #610 — "what do these definitions look like"). This app is the
- * first to publish one, so treat the shape as provisional and align it with the
- * platform's field renderers before relying on it. Lives under `runtime/` so the
- * request-time client can import the validation without pulling in build-time code.
+ * `configSchema` is re-exported from `src/module.ts`, where `laioutr app release`
+ * reads it and stores it as the version's `app_versions.definition`.
  */
+import { type AppConfig, type AppConfigManifest, type ConfigKey, manifest } from './manifest';
 
-export interface ConfigFieldDef {
-  /** Maps onto a Cockpit field renderer. `secret` is a write-only, encrypted input. */
-  type: 'text' | 'url' | 'secret';
-  label: string;
-  description: string;
-  required: boolean;
-  /** Environment variable that fills this field on the server when config is empty. */
-  env: string;
-  /** Write-only, stored encrypted, never echoed back. */
-  secret?: boolean;
-}
+/** What the platform stores as `app_versions.definition` and renders a form from. */
+export { manifest as configSchema } from './manifest';
 
-export const configSchema = {
-  fields: {
-    endpoint: {
-      type: 'url',
-      label: 'Shop endpoint',
-      description:
-        'Origin of the B2B-Sellers Shopware shop, e.g. https://shop.example.com — WITHOUT a /store-api suffix (the client appends /store-api and /b2b itself).',
-      required: true,
-      env: 'B2BSELLERS_ENDPOINT',
-    },
-    accessToken: {
-      type: 'secret',
-      label: 'Store API access key (sw-access-key)',
-      description: "The sales-channel access key of the shop. Write-only; stored encrypted; never exposed to the browser.",
-      required: true,
-      secret: true,
-      env: 'B2BSELLERS_ACCESS_TOKEN',
-    },
-  },
-} as const satisfies { fields: Record<string, ConfigFieldDef> };
+const APP_NAME = '@laioutr/app-b2bsellers';
 
-export type B2bSellersConfig = Record<keyof typeof configSchema.fields, string>;
-
-/**
- * Field values read from the environment — the module's defaults, and the
- * request-time fallback. Empty string when a variable is unset, so validation
- * (not a missing key) is what reports it.
- */
-export function resolveConfigFromEnv(env: NodeJS.ProcessEnv = process.env): B2bSellersConfig {
-  const out = {} as B2bSellersConfig;
-  for (const key of Object.keys(configSchema.fields) as (keyof B2bSellersConfig)[]) {
-    out[key] = env[configSchema.fields[key].env] ?? '';
-  }
+/** Field values read from the environment — the module's defaults and the request-time fallback. */
+export function resolveFromEnv(m: AppConfigManifest = manifest, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, def] of Object.entries(m.fields)) out[key] = env[def.env] ?? '';
   return out;
 }
 
-/**
- * Validate a resolved config, returning the trimmed values or throwing an error
- * that names exactly what is wrong — so a misconfiguration fails fast with a
- * readable message instead of surfacing as an opaque 401 on the first shop call.
- */
-export function validateB2bSellersConfig(config: Partial<B2bSellersConfig>): B2bSellersConfig {
-  const errors: string[] = [];
-  const out = {} as B2bSellersConfig;
+/** Apply one field's declarative rules; push readable messages onto `errors`. */
+function checkField(value: string, def: AppConfigManifest['fields'][string], errors: string[]): void {
+  if (!value) {
+    if (def.required) errors.push(`${def.label} is missing — set it in the app config or the ${def.env} environment variable`);
+    return;
+  }
+  if (def.type === 'url' && !URL.canParse(value)) {
+    errors.push(`${def.label} must be a URL (got "${value}")`);
+  }
+  const c = def.constraints;
+  if (c?.notEndsWith && value.replace(/\/+$/, '').endsWith(c.notEndsWith)) {
+    errors.push(`${def.label} must not end with "${c.notEndsWith}" (got "${value}")`);
+  }
+  if (c?.pattern && !new RegExp(c.pattern).test(value)) {
+    errors.push(`${def.label} has an invalid format (got "${value}")`);
+  }
+}
 
-  for (const key of Object.keys(configSchema.fields) as (keyof B2bSellersConfig)[]) {
-    const def = configSchema.fields[key];
+/**
+ * Validate a resolved config against the manifest, returning the trimmed values
+ * or throwing an error that names exactly what is wrong — so a misconfiguration
+ * fails fast with a readable message instead of an opaque 401 on the first call.
+ */
+export function validateConfig(config: Record<string, string | undefined>, m: AppConfigManifest = manifest, appName = APP_NAME): Record<string, string> {
+  const errors: string[] = [];
+  const out: Record<string, string> = {};
+  for (const [key, def] of Object.entries(m.fields)) {
     const value = (config[key] ?? '').trim();
     out[key] = value;
-
-    if (!value) {
-      if (def.required) errors.push(`${def.label} is missing — set it in the app config or the ${def.env} environment variable`);
-      continue;
-    }
-    if (def.type === 'url') {
-      let url: URL | undefined;
-      try {
-        url = new URL(value);
-      } catch {
-        errors.push(`${def.label} must be a URL (got "${value}")`);
-      }
-      if (url && /\/store-api\/?$/.test(url.pathname)) {
-        errors.push(`${def.label} must be the shop origin WITHOUT a /store-api suffix (got "${value}")`);
-      }
-    }
+    checkField(value, def, errors);
   }
-
-  if (errors.length) {
-    throw new Error(`@laioutr/app-b2bsellers is misconfigured:\n- ${errors.join('\n- ')}`);
-  }
+  if (errors.length) throw new Error(`${appName} is misconfigured:\n- ${errors.join('\n- ')}`);
   return out;
+}
+
+// ── this app's typed bindings (the only place the concrete field keys appear) ──
+
+/** The module defaults: every field from its environment variable. */
+export const resolveDefaults = (): AppConfig => resolveFromEnv() as AppConfig;
+
+/**
+ * The connection for a request: the injected project config wins field-by-field,
+ * an empty field falls back to its environment variable, then validation throws.
+ * Generic over the manifest's keys, so a new field flows through untouched.
+ */
+export function resolveConnectionConfig(injected?: Partial<AppConfig>): AppConfig {
+  const merged = resolveFromEnv();
+  for (const key of Object.keys(merged) as ConfigKey[]) {
+    const value = injected?.[key];
+    if (value) merged[key] = value;
+  }
+  return validateConfig(merged) as AppConfig;
 }
