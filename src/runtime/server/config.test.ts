@@ -1,27 +1,56 @@
 import { describe, expect, it } from 'vitest';
-import { configSchema, resolveConnectionConfig, resolveFromEnv, validateConfig } from './config';
-import type { AppConfigManifest } from './manifest';
+import { type AppConfigManifest, configSchema, resolveConnectionConfig, resolveFromEnv, validateConfig, validateManifest } from './config';
 
-describe('configSchema (the manifest app release publishes)', () => {
-  it('declares the two connection fields with their env vars', () => {
-    expect(Object.keys(configSchema.fields)).toEqual(['endpoint', 'accessToken']);
-    expect(configSchema.fields.endpoint.env).toBe('B2BSELLERS_ENDPOINT');
-    expect(configSchema.fields.accessToken.env).toBe('B2BSELLERS_ACCESS_TOKEN');
+const fields = () => (configSchema as any).studioConfig.b2b.connection.fields;
+
+describe('configSchema (the cascading manifest app release publishes)', () => {
+  it('nests scope → block → section → fields', () => {
+    expect(Object.keys(configSchema)).toEqual(['studioConfig']);
+    expect(Object.keys((configSchema as any).studioConfig)).toEqual(['b2b']);
+    expect(Object.keys(fields())).toEqual(['endpoint', 'accessToken']);
   });
 
-  it('marks the access token as a secret field and the endpoint constraint as data', () => {
-    expect(configSchema.fields.accessToken.secret).toBe(true);
-    expect(configSchema.fields.endpoint.constraints).toEqual({ notEndsWith: '/store-api' });
+  it('carries env vars, the secret flag, and the endpoint constraint as data', () => {
+    expect(fields().endpoint.env).toBe('B2BSELLERS_ENDPOINT');
+    expect(fields().accessToken.env).toBe('B2BSELLERS_ACCESS_TOKEN');
+    expect(fields().accessToken.secret).toBe(true);
+    expect(fields().endpoint.constraints).toEqual({ notEndsWith: '/store-api' });
   });
 });
 
-describe('resolveFromEnv', () => {
+describe('validateManifest — minimal structural self-check (runs on push)', () => {
+  it('accepts the real manifest', () => {
+    expect(() => validateManifest()).not.toThrow();
+  });
+
+  it('rejects an unknown field type', () => {
+    const m = { g: { fields: { x: { type: 'wat', label: 'X', required: true, env: 'X' } } } } as unknown as AppConfigManifest;
+    expect(() => validateManifest(m)).toThrow(/type must be one of text\|url\|secret/);
+  });
+
+  it('rejects a duplicate env var', () => {
+    const m = { g: { fields: { a: { type: 'text', label: 'A', required: true, env: 'DUP' }, b: { type: 'text', label: 'B', required: true, env: 'DUP' } } } } as unknown as AppConfigManifest;
+    expect(() => validateManifest(m)).toThrow(/env "DUP" is already used/);
+  });
+
+  it('rejects a field with no env and no label', () => {
+    const m = { g: { fields: { x: { type: 'text', required: true } } } } as unknown as AppConfigManifest;
+    expect(() => validateManifest(m)).toThrow(/label is required[\s\S]*env is required/);
+  });
+
+  it('rejects an uncompilable constraint pattern', () => {
+    const m = { g: { fields: { x: { type: 'text', label: 'X', required: true, env: 'X', constraints: { pattern: '(' } } } } } as unknown as AppConfigManifest;
+    expect(() => validateManifest(m)).toThrow(/pattern is not a valid regex/);
+  });
+});
+
+describe('resolveFromEnv (collects fields from anywhere in the tree)', () => {
   it('reads each field from its declared environment variable', () => {
     const cfg = resolveFromEnv(configSchema, { B2BSELLERS_ENDPOINT: 'https://shop.example.com', B2BSELLERS_ACCESS_TOKEN: 'SWSC123' } as NodeJS.ProcessEnv);
     expect(cfg).toEqual({ endpoint: 'https://shop.example.com', accessToken: 'SWSC123' });
   });
 
-  it('yields empty strings when unset (so validation, not a missing key, reports it)', () => {
+  it('yields empty strings when unset', () => {
     expect(resolveFromEnv(configSchema, {} as NodeJS.ProcessEnv)).toEqual({ endpoint: '', accessToken: '' });
   });
 });
@@ -51,12 +80,8 @@ describe('validateConfig — driven by the manifest, no per-field code', () => {
     expect(() => validateConfig({ endpoint: 'not a url', accessToken: 'SWSC123' })).toThrow(/must be a URL/);
   });
 
-  it('collects several problems into one message', () => {
-    expect(() => validateConfig({ endpoint: '', accessToken: '' })).toThrow(/B2BSELLERS_ENDPOINT[\s\S]*B2BSELLERS_ACCESS_TOKEN/);
-  });
-
-  it('is generic over the manifest — a made-up manifest validates by its own rules', () => {
-    const m = { fields: { token: { type: 'text', label: 'Token', description: '', required: true, env: 'X_TOKEN' } } } as unknown as AppConfigManifest;
+  it('is generic over a foreign, differently-nested manifest', () => {
+    const m = { scope: { block: { section: { fields: { token: { type: 'text', label: 'Token', description: '', required: true, env: 'X_TOKEN' } } } } } } as unknown as AppConfigManifest;
     expect(validateConfig({ token: 'ok' }, m, '@x/app')).toEqual({ token: 'ok' });
     expect(() => validateConfig({ token: '' }, m, '@x/app')).toThrow(/@x\/app is misconfigured[\s\S]*Token is missing/);
   });

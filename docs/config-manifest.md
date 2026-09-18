@@ -1,89 +1,110 @@
 # App config manifest — how it works
 
-This app describes its configuration **declaratively**, in one manifest, and a
+This app describes its configuration **declaratively**, in one JSON manifest, and a
 **generic handler** turns that manifest into defaults, environment resolution and
-validation with no per-field code. The single reason to change config behaviour
-is to edit the manifest.
+validation with no per-field code. The single reason to change config is to edit
+the manifest.
 
-## Two files, one principle
+## The files
 
 ```
-src/runtime/server/manifest.ts   ← DECLARATIVE. The only file you edit to add/change a field.
+manifest.json                    ← DECLARATIVE data, at the package root (next to laioutrrc.json).
+                                   The only file you edit to add/change config.
 src/runtime/server/config.ts     ← GENERIC handler. Carries no field names; rarely touched.
+package.json  "imports"          ← "#manifest": "./manifest.json" — how everything imports it.
 ```
 
-- **`manifest.ts`** — pure data: each field's `type`, `label`, `description`,
-  `required`, `env`, `secret`, and declarative `constraints`. No logic.
-- **`config.ts`** — reads *any* manifest and produces `resolveDefaults()`,
-  `resolveConnectionConfig()` and `validateConfig()`. It knows the field *types*
-  (`text | url | secret`) and *constraint kinds* (`notEndsWith`, `pattern`) — never
-  the word "endpoint". It is written to be lifted into `@laioutr-core/kit` as a
-  shared `defineAppConfig`, so every app can share one implementation.
+The manifest is imported everywhere as **`#manifest`** (a Node subpath import), so
+no file path leaks into the code and it resolves the same in the build, the
+runtime, the tests, and at a consumer.
 
-Even app-specific validation is **data**, not code — e.g. "endpoint must not carry
-`/store-api`" is expressed as `constraints: { notEndsWith: '/store-api' }` in the
-manifest, applied by the generic handler.
+## Cascading shape
+
+The manifest is a **tree grouped by scope**, not a flat field list — so it stays
+clear what each part is responsible for and there is room to grow:
+
+```
+studioConfig            ← scope: where it is configured (the Studio)
+  └─ b2b                ← block (the app / feature)
+      └─ connection     ← section (label: "Shop connection")
+          └─ fields     ← endpoint, accessToken
+```
+
+The handler **collects `fields` from anywhere in the tree**, so new scopes, blocks
+or sections need no code change. Add a field type by extending the handler; add a
+*field* by editing only the manifest.
+
+## A field
+
+```json
+"endpoint": {
+  "type": "url",              // text | url | secret  → a Cockpit field renderer
+  "label": "Shop endpoint",
+  "description": "…",
+  "required": true,
+  "env": "B2BSELLERS_ENDPOINT",          // env-var fallback (see precedence)
+  "constraints": { "notEndsWith": "/store-api" }   // rules are DATA, not code
+}
+```
+
+`secret: true` marks a write-only, encrypted, never-echoed value.
 
 ## Identity is not here — it is in package.json
 
-`name`, `version` and `peerDependencies` (which plugin, which version, what it is
-compatible with) are read by the platform from **`package.json`**. Duplicating
-them in the manifest would only create a second source of truth, so the manifest
-holds config only.
+`name`, `version`, `peerDependencies` (which plugin, which version, compatibility)
+are read by the platform from **`package.json`**. The manifest holds config only,
+so there is no second source of truth.
 
 ## The platform contract
 
-`laioutr app release` imports **`configSchema`** from `src/module.ts` (via jiti)
-and stores it as the version's **`app_versions.definition`** — `configSchema` is
-just the manifest, re-exported. The Cockpit then renders a settings form from it
-(LAIOUTR-94), and the chosen values become `project_apps.config` →
-`laioutrrc.json → apps[].config`.
+`laioutr app release` imports **`configSchema`** from `src/module.ts` (via jiti) —
+`configSchema` is just the manifest — and stores it as `app_versions.definition`.
+The Cockpit then renders a Studio form from it (LAIOUTR-94); the chosen values
+become `project_apps.config` → `laioutrrc.json → apps[].config`.
+
+> The exact field-definition shape the Cockpit renders is **provisional**
+> (LAIOUTR-94 / PR #610). This app is the first to publish one; the `secret` type
+> in particular needs a Cockpit renderer + encrypted storage.
+
+## Value flow + precedence
 
 ```
-manifest.ts ──(re-export)──> configSchema ──(app release)──> app_versions.definition ──> Cockpit form
+Studio form (future) → project_apps.config → laioutrrc.apps[].config (rc fetch)
+  → runtimeConfig['@laioutr/app-b2bsellers']  (server-only)  → useB2bSellersClient()
 ```
-
-> The exact field-definition shape the Cockpit renders is **not yet fixed**
-> (LAIOUTR-94 / PR #610). This app is the first to publish a `configSchema`, so
-> the shape is provisional — the `secret` type in particular needs a Cockpit
-> renderer + encrypted storage.
-
-## How a value reaches the running app
-
 ```
-Cockpit form (future) → project_apps.config → laioutrrc.apps[].config (via rc fetch)
-  → runtimeConfig['@laioutr/app-b2bsellers']  (server-only; never in the client bundle)
-  → useB2bSellersClient()  → resolveConnectionConfig(injected)
-```
-
-**Precedence** (in the generic handler):
-
-```
-project config (laioutrrc.apps[].config)   ← wins field-by-field
+project config (laioutrrc)   ← wins field-by-field
   ↓ else
-process.env.<field.env>                      ← e.g. B2BSELLERS_ENDPOINT / _ACCESS_TOKEN on Vercel
+process.env.<field.env>       ← e.g. B2BSELLERS_ENDPOINT / _ACCESS_TOKEN on Vercel
   ↓ else
 empty → validation throws a readable error (fail fast, not an opaque 401)
 ```
 
-## Adding or changing a field
+## Two validations
 
-Edit **`manifest.ts` only** — add the field with its `type`, `label`,
-`description`, `required`, `env`, and any `constraints`. `resolveDefaults()`,
-`resolveConnectionConfig()`, `validateConfig()`, the module defaults and the
-published `definition` all pick it up automatically. Cover it in `config.test.ts`.
-Using a *new* field (wiring it into the client) is the only thing that touches code
-— which is inherent, since a value has to be consumed somewhere.
+- **`validateManifest()`** — a minimal structural self-check (every field has a
+  valid `type`, a `label`, a unique `env`, a compilable `pattern`). Runs in
+  `config.test.ts` (on push) **and** in the module setup, so a malformed manifest
+  fails at build/release, not at a customer's first request.
+- **`validateConfig()`** — validates the resolved *values* at runtime against the
+  manifest's rules.
+
+## Adding a field
+
+Edit **`manifest.json` only** — add the field under any section with its `type`,
+`label`, `description`, `required`, `env`, and any `constraints`. Env resolution,
+validation, the module defaults and the published `definition` all follow. Cover
+it in `config.test.ts`. (Wiring a *new* field into the client is the only code
+touch — inherent, since a value has to be consumed somewhere.)
 
 ## Delivering config on live
 
-1. Set the fields' env vars in the host (Vercel) — `B2BSELLERS_ENDPOINT` and
-   `B2BSELLERS_ACCESS_TOKEN`; endpoint **without** `/store-api`.
+1. Set the fields' env vars in the host (Vercel) — endpoint **without** `/store-api`.
 2. Run `laioutr app release` so the manifest lands in `app_versions.definition`.
 
 ## Direction (platform, LAIOUTR-94)
 
 Lift `config.ts` into `@laioutr-core/kit` as a shared `defineAppConfig(manifest)`
 so every plugin uses one implementation: a per-plugin declarative manifest, zero
-per-field logic, one place to change. This app's `config.ts` is written to make
-that extraction a move, not a rewrite.
+per-field logic, one place to change. `config.ts` is written to make that
+extraction a move, not a rewrite.

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 import { addServerImportsDir, createResolver, defineNuxtModule, installModule } from '@nuxt/kit';
 import { defu } from 'defu';
-import { configSchema, resolveDefaults } from './runtime/server/config';
+import { configSchema, resolveDefaults, validateManifest } from './runtime/server/config';
 import { registerLaioutrApp } from '@laioutr-core/kit';
 import { name, version } from '../package.json';
 
@@ -63,6 +63,10 @@ export default defineNuxtModule<ModuleOptions>({
   // project config → environment → empty (then validation fails fast).
   defaults: resolveDefaults(),
   async setup(_options, nuxt) {
+    // Fail the build/release if the manifest itself is malformed, rather than at a
+    // customer's first request. Cheap and runs on every prepare/build/release.
+    validateManifest();
+
     const { resolve } = createResolver(import.meta.url);
     const resolveRuntimeModule = (path: string) => resolve('./runtime', path);
 
