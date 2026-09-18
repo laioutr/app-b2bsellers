@@ -14,14 +14,24 @@ src/runtime/server/config.ts     ← GENERIC handler. Carries no field names; ra
 package.json  "imports"          ← "#manifest": "./manifest.json" — how everything imports it.
 ```
 
-The manifest is imported everywhere as **`#manifest`** (a Node subpath import), so
-no file path leaks into the code and it resolves the same in the build, the
-runtime, the tests, and at a consumer.
+Imported everywhere as **`#manifest`** (a Node subpath import), so no file path
+leaks into the code and it resolves the same in build, runtime, tests, and at a
+consumer.
+
+## The manifest is the platform's config definition — not env
+
+The manifest becomes `app_versions.definition`; the Cockpit renders a **Studio**
+form from it, and the chosen values flow through `project_apps.config` →
+`laioutrrc.json → apps[].config` → the app. **That project config is the source of
+a value.** The manifest therefore holds no environment-variable names.
+
+The environment is only an **app-side fallback**, for a host that has no Studio
+value yet (e.g. Vercel today). Its variable name is **derived by convention** in
+the handler — `B2BSELLERS_` + the field key in UPPER_SNAKE_CASE (`endpoint` →
+`B2BSELLERS_ENDPOINT`, `accessToken` → `B2BSELLERS_ACCESS_TOKEN`) — never declared
+in the manifest.
 
 ## Cascading shape
-
-The manifest is a **tree grouped by scope**, not a flat field list — so it stays
-clear what each part is responsible for and there is room to grow:
 
 ```
 studioConfig            ← scope: where it is configured (the Studio)
@@ -31,8 +41,7 @@ studioConfig            ← scope: where it is configured (the Studio)
 ```
 
 The handler **collects `fields` from anywhere in the tree**, so new scopes, blocks
-or sections need no code change. Add a field type by extending the handler; add a
-*field* by editing only the manifest.
+or sections need no code change.
 
 ## A field
 
@@ -42,29 +51,17 @@ or sections need no code change. Add a field type by extending the handler; add 
   "label": "Shop endpoint",
   "description": "…",
   "required": true,
-  "env": "B2BSELLERS_ENDPOINT",          // env-var fallback (see precedence)
   "constraints": { "notEndsWith": "/store-api" }   // rules are DATA, not code
 }
 ```
 
-`secret: true` marks a write-only, encrypted, never-echoed value.
+`secret: true` marks a write-only, encrypted, never-echoed value. No `env` key —
+the fallback variable is derived (see above).
 
 ## Identity is not here — it is in package.json
 
-`name`, `version`, `peerDependencies` (which plugin, which version, compatibility)
-are read by the platform from **`package.json`**. The manifest holds config only,
-so there is no second source of truth.
-
-## The platform contract
-
-`laioutr app release` imports **`configSchema`** from `src/module.ts` (via jiti) —
-`configSchema` is just the manifest — and stores it as `app_versions.definition`.
-The Cockpit then renders a Studio form from it (LAIOUTR-94); the chosen values
-become `project_apps.config` → `laioutrrc.json → apps[].config`.
-
-> The exact field-definition shape the Cockpit renders is **provisional**
-> (LAIOUTR-94 / PR #610). This app is the first to publish one; the `secret` type
-> in particular needs a Cockpit renderer + encrypted storage.
+`name`, `version`, `peerDependencies` are read by the platform from
+**`package.json`**. The manifest holds config only.
 
 ## Value flow + precedence
 
@@ -73,38 +70,39 @@ Studio form (future) → project_apps.config → laioutrrc.apps[].config (rc fet
   → runtimeConfig['@laioutr/app-b2bsellers']  (server-only)  → useB2bSellersClient()
 ```
 ```
-project config (laioutrrc)   ← wins field-by-field
+project config (laioutrrc)        ← wins field-by-field
   ↓ else
-process.env.<field.env>       ← e.g. B2BSELLERS_ENDPOINT / _ACCESS_TOKEN on Vercel
+process.env[ B2BSELLERS_<FIELD> ] ← derived fallback var, on a host without the Studio value
   ↓ else
 empty → validation throws a readable error (fail fast, not an opaque 401)
 ```
 
+The env var **never lands in `laioutrrc.json`** — it is read directly by the server
+at runtime, in parallel to the project config.
+
 ## Two validations
 
-- **`validateManifest()`** — a minimal structural self-check (every field has a
-  valid `type`, a `label`, a unique `env`, a compilable `pattern`). Runs in
-  `config.test.ts` (on push) **and** in the module setup, so a malformed manifest
-  fails at build/release, not at a customer's first request.
-- **`validateConfig()`** — validates the resolved *values* at runtime against the
-  manifest's rules.
+- **`validateManifest()`** — a minimal structural self-check (valid `type`, a
+  `label`, a compilable `pattern`, no duplicate field key). Runs in `config.test.ts`
+  (on push) **and** in module setup, so a malformed manifest fails at build/release.
+- **`validateConfig()`** — validates the resolved *values* at runtime.
 
 ## Adding a field
 
 Edit **`manifest.json` only** — add the field under any section with its `type`,
-`label`, `description`, `required`, `env`, and any `constraints`. Env resolution,
-validation, the module defaults and the published `definition` all follow. Cover
-it in `config.test.ts`. (Wiring a *new* field into the client is the only code
-touch — inherent, since a value has to be consumed somewhere.)
+`label`, `description`, `required`, and any `constraints`. Env resolution (via the
+derived var), validation, the module defaults and the published `definition` all
+follow. Cover it in `config.test.ts`. (Wiring a *new* field into the client is the
+only code touch — inherent, since a value has to be consumed somewhere.)
 
 ## Delivering config on live
 
-1. Set the fields' env vars in the host (Vercel) — endpoint **without** `/store-api`.
+1. Set the derived env vars in the host (Vercel) — `B2BSELLERS_ENDPOINT` (without
+   `/store-api`) and `B2BSELLERS_ACCESS_TOKEN` (secret).
 2. Run `laioutr app release` so the manifest lands in `app_versions.definition`.
 
 ## Direction (platform, LAIOUTR-94)
 
 Lift `config.ts` into `@laioutr-core/kit` as a shared `defineAppConfig(manifest)`
 so every plugin uses one implementation: a per-plugin declarative manifest, zero
-per-field logic, one place to change. `config.ts` is written to make that
-extraction a move, not a rewrite.
+per-field logic, one place to change.
