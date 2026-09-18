@@ -49,11 +49,45 @@ denies it B2B-platform access on every route.
 ### Checking a shop yourself
 
 ```bash
-node scripts/verify-openapi.mjs                       # map vs. the shop's OpenAPI document
-node scripts/smoke-store-api.mjs --user=… --password=…  # map vs. the shop itself, read-only
+pnpm verify:openapi     # the operations map against the shop's own OpenAPI document
+pnpm verify:shop        # the operations map against the shop itself, read-only
 ```
 
-The second is the stronger claim: a route can match the document and still 404.
+Both read `SHOPWARE_SHOP_URL` and `SHOPWARE_ACCESS_KEY` from the environment, and both take flags
+straight through — `pnpm verify:openapi -- --save=openapi3.json`, `pnpm verify:shop -- --user=… --password=…`.
+
+```bash
+export SHOPWARE_SHOP_URL=https://laioutr.demoshop.b2b-sellers.com
+export SHOPWARE_ACCESS_KEY="$(node -p "require('./laioutrrc.json').apps[0].config.accessToken")"
+```
+
+**Why this exists.** `src/runtime/server/client/operations.ts` claims, for 95 operations, that a given
+name means a given method on a given path with a given response. Those claims were written without a
+live instance — and a wrong one is invisible: TypeScript is satisfied, the linter is quiet, and the
+unit tests mock the client away. It surfaces only at runtime, as a 404 that reads like "the plugin
+cannot do this" rather than "the path is misspelled". This script makes the shop the authority instead
+of the vendor's documentation, and turns a silent lie in the types into a non-zero exit code.
+
+It has earned its keep: it found **29 operations missing the `/store-api` prefix** and 11 more under an
+undocumented `sales-representative` one — forty dead routes — and later caught a body this repository
+declared optional where the shop requires it.
+
+**`verify:openapi`** fetches `GET /store-api/_info/openapi3.json` and compares every entry. Verdicts:
+`OK`, `MISMATCH` (status, body or parameter names differ), `WRONG_METHOD`, `PREFIX_MISSING` (the path
+exists but the map omits the server prefix, so the call 404s), `PATH_MISSING`. `--spec=openapi3.json`
+runs it offline against a saved document, `--fields` prints the response's top-level fields, `--all`
+lists the spec paths the map does not cover, `--json` is machine-readable. Exit: 0 clean, 1 mismatches,
+2 could not run. **Today it exits 1**: 16 mismatches and 2 wrong methods are still open, so treat
+the run as a report to read rather than a gate that has ever been green.
+
+**`verify:shop`** is the stronger claim: it calls the shop rather than reading its document, because a
+route can match the document and still 404 — `order-approval` `list` and `create` did exactly that. It
+skips every mutating operation by name, so it stays read-only; with `--user` / `--password` it signs in
+and reads real data.
+
+The name is about **OpenAPI**, the specification format Shopware serves about itself. Nothing here talks
+to OpenAI and no API key of that kind is involved — the only credential is the shop's own
+sales-channel access key.
 
 - [✨ &nbsp;Release Notes](/CHANGELOG.md)
   <!-- - [📖 &nbsp;Documentation](https://example.com) -->

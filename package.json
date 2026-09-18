@@ -38,6 +38,8 @@
     "release": "pnpm run prepack && changeset publish",
     "test": "vitest run --passWithNoTests",
     "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit",
+    "verify:openapi": "node scripts/verify-openapi.mjs",
+    "verify:shop": "node scripts/smoke-store-api.mjs",
     "test:watch": "vitest watch"
   },
   "browserslist": [
