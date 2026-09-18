@@ -123,7 +123,11 @@ type CatalogMiscOperations = {
   // names its shipping and payment method, so a form that offers them needs
   // the shop's own list.
   'listShippingMethods post /store-api/shipping-method': { query?: { onlyAvailable?: boolean }; body?: ShopwareCriteria } & Ok<ShopwareListResponse<ShippingMethod>>;
-  'listPaymentMethods post /store-api/payment-method': { query?: { onlyAvailable?: boolean }; body?: ShopwareCriteria } & Ok<ShopwareListResponse<PaymentMethod>>;
+  // The shop marks the body required on payment-method and optional on
+  // shipping-method — an asymmetry in its own document, mirrored rather than
+  // smoothed over, so the verifier stays quiet and a caller sends what the shop
+  // asks for.
+  'listPaymentMethods post /store-api/payment-method': { query?: { onlyAvailable?: boolean }; body: ShopwareCriteria } & Ok<ShopwareListResponse<PaymentMethod>>;
   'getSnippets get /store-api/snippets': Ok<Record<string, string>>;
   'listLoginTargets get /store-api/login-targets': Ok<ShopwareListResponse<Record<string, unknown>>>;
   'getPlatformCms get /store-api/platform-cms/{id}': { pathParams: { id: string } } & Ok<Record<string, unknown>>;
