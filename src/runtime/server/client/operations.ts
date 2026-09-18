@@ -87,11 +87,28 @@ type CustomerOperations = {
 // `updateOffer` is how an offer's status changes; there is no status route.
 type OfferOperations = {
   'listOffers post /store-api/offer/list': { body?: ShopwareCriteria } & Ok<ShopwareListResponse<Offer>>;
+  // **The document spells this one `/offer/`, with a trailing slash, and that
+  // 404s** — the shop serves `/store-api/offer`. So it is absent from the
+  // specification as written and the verifier cannot confirm it; the shape below
+  // is what the shop accepted on 2026-09-18, creating offers 1161 and 1162.
+  // `number` is required despite being marked optional, and the offer needs its
+  // customer, its address snapshots and a zeroed `shippingCosts` up front — an
+  // offer created without them exists but can never take a position.
+  'createOffer post /store-api/offer': { body: Body } & Ok<Offer>;
   'getOffer get /store-api/offer/{id}': { pathParams: { id: string } } & Ok<Offer>;
   'updateOffer put /store-api/offer/{id}': { pathParams: { id: string }; body: Body } & Ok<Offer>;
   'convertOfferToOrder post /store-api/offer-order/{id}': { pathParams: { id: string }; body?: Body } & Ok<Record<string, unknown>>;
   'generateOfferDocument get /store-api/offer-document/{id}': { pathParams: { id: string } } & Ok<Record<string, unknown>>;
   'sendOfferMail post /store-api/offer-mail/{id}': { pathParams: { id: string }; body?: Body } & Ok<Record<string, unknown>>;
+  // **The parameter is `lineItems`, not the `object` the specification names.**
+  // The shop is the authority — it answers `400 Parameter "lineItems" is
+  // missing` — and sending it under any other name fails the whole request while
+  // the offer itself survives, which reads as a closed module rather than one
+  // misspelled field.
+  'addOfferProducts post /store-api/offer-add-products/{offerId}': {
+    pathParams: { offerId: string };
+    body: { lineItems: Array<{ productId: string; quantity?: number }> };
+  } & Ok<Record<string, unknown>>;
   'listOfferStates post /store-api/offer-states': { body?: ShopwareCriteria } & Ok<ShopwareListResponse<Record<string, unknown>>>;
 };
 
@@ -102,6 +119,10 @@ type ProductListOperations = {
   'getProductList get /store-api/product-lists/{id}': { pathParams: { id: string } } & Ok<ProductList>;
   'updateProductList patch /store-api/product-lists/{id}': { pathParams: { id: string }; body: Body } & Ok<ProductList>;
   'deleteProductList delete /store-api/product-lists/{id}': { pathParams: { id: string } } & Ok<Record<string, unknown>>;
+  'addProductListItems post /store-api/product-lists/{id}/items': {
+    pathParams: { id: string };
+    body: { items: Array<{ productId?: string; articleNumber?: string; quantity?: number; position?: number; comment?: string }> };
+  } & Ok<Record<string, unknown>>;
   'removeProductListProduct delete /store-api/product-lists/{id}/product/{productId}': {
     pathParams: { id: string; productId: string };
   } & Ok<Record<string, unknown>>;
@@ -109,6 +130,10 @@ type ProductListOperations = {
 
 // ── /store-api: catalog + misc ────────────────────────────────────────────
 type CatalogMiscOperations = {
+  // The catalogue read. Its elements stay loose, like the listing routes around
+  // it: a product carries prices, variants, media and custom fields, and a DTO
+  // guessed at rather than derived would be a promise this layer cannot keep.
+  'listProducts post /store-api/product': { query?: { 'sw-include-search-info'?: boolean }; body?: ShopwareCriteria } & Ok<ShopwareListResponse<Record<string, unknown>>>;
   'productTableListing post /store-api/product-table-listing': { body?: Body } & Ok<ShopwareListResponse<Record<string, unknown>>>;
   'pdpVariantList post /store-api/variant-list/{productId}': { pathParams: { productId: string }; body?: ShopwareCriteria } & Ok<
     ShopwareListResponse<Record<string, unknown>>

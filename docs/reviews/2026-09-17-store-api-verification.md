@@ -1,10 +1,15 @@
 # Store-API surface verification against the live demo shop
 
-Stand 2026-09-17. Verifies the 92-entry operations map in
+Stand 2026-09-17, **corrected 2026-09-18**. Verifies the operations map in
 `src/runtime/server/client/operations.ts` (PR #3) against the shop the October 5 demo runs on.
 
 The map was written without a live instance and says so in its own header. This is the pass that
 replaces those guesses with evidence.
+
+**Read the 2026-09-18 corrections before acting on anything here.** The section on writing —
+"offers cannot be built through the Store API here" — is wrong, and so is the claim that the sales
+channel sells one product. Both are marked inline where they appear. The map has grown from 92
+entries to 95 since; the Coverage section carries the current numbers.
 
 ## What was checked, and against what
 
@@ -192,6 +197,28 @@ altogether. They need one authenticated call each with a real payload to pin dow
 
 ## Writing is a different story: offers cannot be built through the Store API here
 
+> **Superseded on 2026-09-18 — every conclusion in this section turned out to be wrong.** Offers are
+> writable through the Store API on this shop, and the catalogue is not one article. What was read as
+> three closed doors was three incomplete requests. The corrections are inline below; the original
+> findings are kept because the wrong reading cost two days and the reasoning is worth seeing.
+>
+> - **`offer-add-products` works.** It takes `lineItems`, not `object`, and the offer it is called on
+>   has to have been created complete: with `offerCustomerId`, nested `billingAddress` /
+>   `deliveryAddress` **field objects** (a `customer_address` id resolves to nothing and the
+>   plugin's calculator dies on it), and a zeroed `shippingCosts` struct. An offer created without
+>   those exists and can never take a position — which is what produced the 403 read as a permission
+>   wall. Verified by creating offers 1147, 1148, 1159, 1161, 1162 and 1164, filling them, and
+>   deleting them again.
+> - **The catalogue is 273 articles**, not one. `POST /store-api/product` on the same `Headless`
+>   channel and the same access key answers the full catalogue; `app-boltze` has been reading and
+>   pricing it since 2026-09-17.
+> - **Offer → order works too.** `POST /store-api/offer-order/{id}` produced orders 10180 and 10181
+>   on 2026-09-18; both were cancelled in the admin afterwards.
+>
+> What stays true: `POST /offer-request` — the cart-to-offer route — is still refused, and the
+> document still spells the create route `/offer/` with a trailing slash that 404s.
+
+
 Reading the shop works. Creating the data a sales demo needs does not, and the reason is not one
 missing parameter — three independent routes into an offer are each closed, by different doors.
 Established 2026-09-17 against the live shop with a representative session.
@@ -238,6 +265,10 @@ generic placeholder.
 
 ### What that needs, and from whom
 
+**Superseded — nothing was needed from anyone.** The catalogue was reachable on the channel we
+already had, and the offer routes answered once the request bodies were complete. The Admin-API
+integration this section asks for was never required. Kept for the record:
+
 None of this is API work. Someone with Shopware admin on the demo shop has to either:
 
 - assign the product catalogue and its visibility to the `Headless` sales channel, and enable the
@@ -260,9 +291,13 @@ larger practical problem than the paths and is fixed in the same pass.
 
 ## Coverage
 
-139 of the shop's 187 paths are not in the map. Several are ones `app-boltze` will need:
-`/account/login`, `/offer-request`, `/offer-add-products/{offerId}`, `/offer-states`,
-`/sales-representative/offer/{id}`, `/b2b/employee-invitations`.
+**Re-measured 2026-09-18:** 95 operations in the map, 113 specification paths outside it, 0 paths
+missing, 77 confirmed, 16 mismatches and 2 wrong methods left.
+
+Added since the first run, because `app-boltze` needed them: `createOffer`, `addOfferProducts`,
+`addProductListItems`, `listShippingMethods`, `listPaymentMethods`, `listProducts`, plus the offer
+states and the rep's offer delete. `/offer-request` and `/b2b/employee-invitations` are still
+outside the map, and no screen asks for them yet.
 
 ## How to re-run
 
