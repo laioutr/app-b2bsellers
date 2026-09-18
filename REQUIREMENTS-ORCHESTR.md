@@ -15,6 +15,33 @@
 > **Deliverable = diese Liste.** Die fehlenden Query-/Action-Handler und vor
 > allem die fehlenden Canonical Types werden anschließend im Core nachgezogen.
 
+> ---
+>
+> **Stand 2026-09-18 — vier Aussagen dieses Dokuments sind überholt.** Sie bleiben
+> stehen, weil die falsche Lesart zwei Tage gekostet hat und die Begründung
+> lesenswert ist.
+>
+> 1. **Der Canonical-Layer hat B2B-Entities.** `Quote`, `QuoteItem`, `Organization`,
+>    `Employee`, `CostCenter`, `Budget`, `ApprovalFlow`, `ApprovalRule`,
+>    `ProductList`, `ProductListItem` existieren, dazu die Token-Domänen unter
+>    `src/lib/b2b/` (organization, quote, quote-item, cost-center, budget,
+>    approval-flow, cart). Der „Befund" weiter unten — es gebe nichts zum Andocken,
+>    ohne zu erfinden — gilt nicht mehr.
+> 2. **Die echte Lücke bei Angeboten ist die Leseseite**, nicht die Entity:
+>    `b2b/quote/all` und `b2b/quote/by-id` fehlen (DEV-498). Actions, Links und
+>    Fehlertypen sind vorhanden.
+> 3. **Die Reihenfolge kam umgekehrt.** „Deliverable = diese Liste" hieß: erst Core,
+>    dann Integration. Tatsächlich läuft die Integration in `app-boltze` über eigene
+>    `boltze/*`-Tokens gegen den Live-Shop — Angebote werden angelegt, befüllt und in
+>    Bestellungen gewandelt — während die Quote-Queries im Core weiter fehlen.
+> 4. **Die Verifizierung ist erledigt** (Abschnitt E), siehe dort.
+>
+> **Was weiter stimmt:** `Order` fehlt im Core (A1 — geprüft: weder Entity noch
+> Queries), ebenso `CustomerActivity`, `ProductSubscription`,
+> `CustomerProductNumber` und `SalesRankingEntry`. Offen bleiben außerdem das
+> Criteria-Schema (A4), die Money-Frage (A3), der Context-Token-Lifecycle (A5) und
+> `initializePlatform` (D).
+
 ## Entscheidungs-Prinzip (CTO)
 
 > „Bei der Frage, ob eine Entität/Action in die **Canonical Types** oder direkt
@@ -27,11 +54,17 @@ Klassifizierung unten:
 
 ## Was im Canonical-Layer bereits existiert (Stand `@laioutr-core/canonical-types`)
 
+> **Unvollständig (2026-09-18).** Die Liste nennt nur den B2C-Teil; der gesamte
+> B2B-Bereich unter `src/lib/b2b/` und die B2B-Entities fehlen hier — siehe Kopf.
+
 - **Entities:** Product, ProductVariant, Category, Cart, CartItem, BreadcrumbItem, Review, MenuItem, SuggestedSearch(+Entry), Blog*, Comment.
 - **Query-Tokens:** product (search / by-slug / by-category-id / by-category-slug), category (all / by-slug), cart (get-current), wishlist (get-current), menu (by-alias).
 - **Action-Tokens:** auth (login / logout / register / recover / oauth), cart (add/remove/update-items, get-checkout-url), customer (get-current, address create/update/delete/get-all/set-default), review (create), wishlist (add/remove-items).
 - **Links:** product (variants / reviews / breadcrumb / all-categories), category (products / breadcrumb), cart (items / item-variant).
 - **Pagetypes:** product-detail / product-listing / product-search.
+
+> **Überholt (2026-09-18).** Der Absatz war zum Zeitpunkt des Schreibens richtig und
+> ist es heute nicht mehr: die B2B-Entities und ~45 Tokens existieren im Core.
 
 **Befund:** Es gibt **keine** Canonical-Entity und **keine** Tokens für
 Order, Customer (außer get-current/address), Employee, Offer, CostCenter,
@@ -85,6 +118,14 @@ Legende: **Q** = QueryToken (+Entity+Component-Resolver), **A** = ActionToken (s
 
 ---
 
+> **Zeile `offer` überholt (2026-09-18).** `Quote`/`QuoteItem` existieren im Core,
+> ebenso die Actions (`request`, `accept`, `decline`, `cancel`, `request-change`,
+> `get-checkout-url`), der `items`-Link und vier Fehlertypen. Es fehlen nur die
+> **Queries** `b2b/quote/all` und `b2b/quote/by-id` (DEV-498). Die übrigen Zeilen
+> der Tabelle sind ungeprüft geblieben.
+
+---
+
 ## C. Orchestr-Mechanik, die je Entity zusätzlich fehlt
 
 Pro renderbarer Entity (employee, offer, cost-center, budget, order-approval,
@@ -113,6 +154,15 @@ Frontend-Projekt** als Workaround dokumentieren.
 
 ## E. Verifizierungs-Lücken (kein Live-Tenant)
 
+> **Erledigt (2026-09-18).** Ein Live-Shop steht zur Verfügung und die Prüfung ist
+> automatisiert: `scripts/verify-openapi.mjs` vergleicht die Operations-Map mit dem
+> OpenAPI-Dokument des Shops, `scripts/smoke-store-api.mjs` ruft den Shop selbst auf.
+> Aktueller Stand: **95 Operationen, 0 fehlende Pfade, 77 bestätigt**, 16 Mismatches
+> und 2 falsche Methoden offen. Bericht:
+> `docs/reviews/2026-09-17-store-api-verification.md` — **dort zuerst die
+> 2026-09-18-Korrekturen lesen**: der Abschnitt, Angebote seien über die Store API
+> nicht schreibbar, ist falsch.
+
 Vor der finalen Token-/Entity-Definition gegen die **echte B2B-Sellers-Plugin-
 OpenAPI / eine reale Instanz** gegenprüfen:
 - Wire-Shapes der DTOs (Felder/Optionalität) — aktuell best-effort.
@@ -126,7 +176,8 @@ OpenAPI / eine reale Instanz** gegenprüfen:
 - Backend-only-Modul (`module.ts`), `APP_CONFIG_KEY`, Cookie-Key.
 - SDK-Client `@shopware/api-client` (`createAPIClient<B2bSellersOperations>`), `useB2bSellersClient` (Nitro-Auto-Import).
 - Middleware `defineB2bSellers` (`context.client` + Binder-Exports — definiert **keine** Tokens).
-- Wire-DTO-Typen (`server/types/`) + token-freie `queries/`-Schicht (92 `invoke`-Wrapper).
+- Wire-DTO-Typen (`server/types/`) + token-freie `queries/`-Schicht. **Die
+  Operations-Map umfasst inzwischen 95 Operationen** (2026-09-18), nicht 92.
 
 Diese Schicht bleibt als **Beispiel-Surface** bestehen; die eigentlichen
 Handler entstehen, sobald die Bausteine aus A–C im Core (bzw. App-first lt. CTO)
