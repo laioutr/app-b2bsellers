@@ -1,0 +1,26 @@
+{
+  "studioConfig": {
+    "b2b": {
+      "label": "B2B Sellers",
+      "connection": {
+        "label": "Shop connection",
+        "fields": {
+          "endpoint": {
+            "type": "url",
+            "label": "Shop endpoint",
+            "description": "Origin of the B2B-Sellers Shopware shop, e.g. https://shop.example.com — WITHOUT a /store-api suffix (the client appends /store-api and /b2b itself).",
+            "required": true,
+            "constraints": { "notEndsWith": "/store-api" }
+          },
+          "accessToken": {
+            "type": "secret",
+            "label": "Store API access key (sw-access-key)",
+            "description": "The sales-channel access key of the shop. Write-only; stored encrypted; never exposed to the browser.",
+            "required": true,
+            "secret": true
+          }
+        }
+      }
+    }
+  }
+}

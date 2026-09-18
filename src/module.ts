@@ -1,16 +1,47 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
-import { createResolver, defineNuxtModule, installModule } from '@nuxt/kit';
+import { addServerImportsDir, createResolver, defineNuxtModule, installModule } from '@nuxt/kit';
 import { defu } from 'defu';
+import { configSchema, resolveDefaults, validateManifest } from './runtime/server/config';
 import { registerLaioutrApp } from '@laioutr-core/kit';
 import { name, version } from '../package.json';
 
 /**
- * The options the module adds to the nuxt.config.ts.
+ * The app's config manifest. Re-exported here because the Laioutr CLI's
+ * `app release` imports `configSchema` from `src/module.ts` (via jiti) and stores
+ * it as the version's `definition`. Single source of truth in `runtime/server/config`.
  */
-export interface ModuleOptions {}
+export { configSchema };
 
 /**
- * The config the module adds to nuxt.runtimeConfig.public['@laioutr/app-b2bsellers']
+ * The options the module adds to the nuxt.config.ts.
+ */
+export interface ModuleOptions {
+  /**
+   * Base URL (shop origin) of the B2B Sellers Store API, e.g.
+   * `https://shop.example.com`. Both the `/store-api/...` core endpoints and
+   * the `/b2b/...` addon endpoints are resolved against this origin, so it
+   * must NOT carry a `/store-api` suffix.
+   *
+   * @default '' (must be provided before the client can connect)
+   */
+  endpoint: string;
+  /**
+   * Shopware sales-channel access key (the `sw-access-key` header).
+   *
+   * This is a secret: it lives in the private runtime config only and is never
+   * exposed to the client bundle. Delivered through the Laioutr project config
+   * — the `@laioutr/app-b2bsellers` app entry's `config` in `laioutrrc.json`.
+   *
+   * @default '' (must be provided before the client can connect)
+   */
+  accessToken: string;
+}
+
+/**
+ * The config the module adds to nuxt.runtimeConfig.public['@laioutr/app-b2bsellers'].
+ *
+ * Intentionally empty — this app holds no client-exposed config. The B2B
+ * Sellers connection (incl. the access key) is server-only.
  */
 export interface RuntimeConfigModulePublic {}
 
@@ -25,43 +56,50 @@ export default defineNuxtModule<ModuleOptions>({
     version,
     configKey: name, // configKey must match package name
   },
-  // Default configuration options of the Nuxt module
-  defaults: {},
+  // Default configuration options of the Nuxt module. The connection is normally
+  // delivered through the Laioutr project config (`laioutrrc.json` → this app's
+  // `config`); when that is absent — e.g. on a host where only environment
+  // variables are available — these env fallbacks fill it. Precedence:
+  // project config → environment → empty (then validation fails fast).
+  defaults: resolveDefaults(),
   async setup(_options, nuxt) {
+    // Fail the build/release if the manifest itself is malformed, rather than at a
+    // customer's first request. Cheap and runs on every prepare/build/release.
+    validateManifest();
+
     const { resolve } = createResolver(import.meta.url);
     const resolveRuntimeModule = (path: string) => resolve('./runtime', path);
 
     nuxt.options.build.transpile.push(resolve('./runtime'));
 
-    // Runtime configuration for this module
-    // These two statements can be removed if you don't provide a runtime config
+    // Private runtime config: holds the B2B Sellers connection incl. the secret
+    // access key. Server-only — never merged into the public config below.
     nuxt.options.runtimeConfig[name] = defu(nuxt.options.runtimeConfig[name] as Parameters<typeof defu>[0], _options);
-    nuxt.options.runtimeConfig.public[name] = defu(nuxt.options.runtimeConfig.public[name] as Parameters<typeof defu>[0], _options);
+    // Public runtime config: deliberately carries no module options so the
+    // access key cannot leak into the client bundle.
+    nuxt.options.runtimeConfig.public[name] = defu(nuxt.options.runtimeConfig.public[name] as Parameters<typeof defu>[0], {});
 
+    // Expose the server-side B2B Sellers client (`useB2bSellersClient`) as a
+    // Nitro auto-import for use in server routes and Orchestr handlers.
+    addServerImportsDir(resolveRuntimeModule('server/client'));
+
+    // Backend-only connector: registers Orchestr handlers, no frontend
+    // sections/blocks, no image provider.
     await registerLaioutrApp({
       name,
       version,
       orchestrDirs: [resolveRuntimeModule('server/orchestr')],
-      sections: [resolveRuntimeModule('app/sections')],
-      blocks: [resolveRuntimeModule('app/blocks')],
     });
 
-    // Install peer-dependency modules only on prepare-step.
-    // This makes auto-imports and import-aliases work. Remove any modules you might not need.
+    // Install peer-dependency modules only on prepare-step so auto-imports
+    // (#imports, #orchestr) and import-aliases resolve. No UI / image module —
+    // this app ships no components.
     if (nuxt.options._prepare) {
-      await installModule('@nuxt/image');
       await installModule('@laioutr-core/frontend-core');
       await installModule('@laioutr-core/orchestr');
-      await installModule('@laioutr-app/ui');
     }
 
-    // Shared
-    // Imports and other stuff which is shared between client and server
-
-    // Client
-    // Add plugins, composables, etc.
-
     // Server
-    // Add server-only imports, etc.
+    // Server-only imports (client auto-import dir) registered above.
   },
 });
