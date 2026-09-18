@@ -32,7 +32,7 @@ const argv = process.argv.slice(2);
 const mode = argv.find((a) => ['--check', '--seed', '--delete'].includes(a));
 const opt = (name, dflt) => argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? dflt;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const log = (...a) => process.stdout.write(`\n`);
+const log = (...a) => process.stdout.write(a.map(String).join(" ") + "\n");
 const fail = (m) => {
   process.stderr.write(`${m}\n`);
   process.exit(2);

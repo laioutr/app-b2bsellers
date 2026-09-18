@@ -41,7 +41,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const log = (...a) => process.stdout.write(`\n`);
+const log = (...a) => process.stdout.write(a.map(String).join(" ") + "\n");
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MARKER = 'LAIOUTR-DEMO';
 const mode = process.argv.find((a) => ['--check', '--seed', '--delete'].includes(a));
