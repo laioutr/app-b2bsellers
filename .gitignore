@@ -60,3 +60,6 @@ coverage
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Agent tooling: an MCP server list is a local choice, not part of the package.
+.mcp.json
