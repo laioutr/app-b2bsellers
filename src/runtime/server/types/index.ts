@@ -7,4 +7,5 @@ export * from './product-list';
 export * from './cost-center';
 export * from './budget';
 export * from './order-approval';
+export * from './method';
 export * from './misc';

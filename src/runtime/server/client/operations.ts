@@ -55,7 +55,9 @@ import type {
   OrderApprovalActivityEntry,
   OrderApprovalApprover,
   OrderApprovalSettings,
+  PaymentMethod,
   ProductList,
+  ShippingMethod,
   ShopwareCriteria,
   ShopwareListResponse,
 } from '../types';
@@ -115,6 +117,13 @@ type CatalogMiscOperations = {
     Record<string, unknown>
   >;
   'salesRepFastOrder post /store-api/sales-representative/fast-order': { body?: Body } & Ok<Record<string, unknown>>;
+  // Plain Shopware routes, not B2B-Sellers ones, and the SDK's generated
+  // operations are not in play here — so they are declared alongside the rest
+  // rather than reached through the untyped `x post` escape hatch. An order
+  // names its shipping and payment method, so a form that offers them needs
+  // the shop's own list.
+  'listShippingMethods post /store-api/shipping-method': { query?: { onlyAvailable?: boolean }; body?: ShopwareCriteria } & Ok<ShopwareListResponse<ShippingMethod>>;
+  'listPaymentMethods post /store-api/payment-method': { query?: { onlyAvailable?: boolean }; body?: ShopwareCriteria } & Ok<ShopwareListResponse<PaymentMethod>>;
   'getSnippets get /store-api/snippets': Ok<Record<string, string>>;
   'listLoginTargets get /store-api/login-targets': Ok<ShopwareListResponse<Record<string, unknown>>>;
   'getPlatformCms get /store-api/platform-cms/{id}': { pathParams: { id: string } } & Ok<Record<string, unknown>>;
