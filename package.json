@@ -84,5 +84,11 @@
   "packageManager": "pnpm@10.34.1",
   "imports": {
     "#manifest": "./manifest.json"
-  }
+  },
+  "contributors": [
+    {
+      "name": "Roman Tsehynka",
+      "email": "roman.tsehynka@laioutr.com"
+    }
+  ]
 }
