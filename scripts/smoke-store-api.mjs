@@ -110,6 +110,17 @@ const ID_SOURCE = {
   getCustomerActivityType: 'listCustomerActivityTypes',
 };
 
+/**
+ * A minimal valid body for the read operations the shop rejects an empty `{}` on:
+ * `customer-search` wants a top-level `search`, and `product-table-listing` wants
+ * a real Criteria. Without these the probe reads a `400` as if the route were
+ * broken, when it only lacked its required input.
+ */
+const BODY_OVERRIDE = {
+  searchCustomers: { search: 'a' },
+  productTableListing: { page: 1, limit: 5 },
+};
+
 const OPERATION_LINE = /^\s*'([A-Za-z0-9_]+) (get|post|put|patch|delete) (\/[^']*)':/gm;
 
 async function readOperations() {
@@ -144,11 +155,21 @@ async function readConnection() {
   return { endpoint: endpoint.replace(/\/+$/, ''), accessToken };
 }
 
+/**
+ * The field a list's rows expose their by-id key under. Most use `id`; the
+ * `/b2b/employees` rows expose the relation id as `id` and the employee's own id
+ * — what `/b2b/employee/{id}` wants — as `employeeId`, so harvesting `id` there
+ * made `getEmployee` 404.
+ */
+const LIST_ID_FIELD = {
+  listEmployees: 'employeeId',
+};
+
 /** Collects the first plausible entity id out of whatever shape a list returns. */
-function firstId(payload) {
+function firstId(payload, field = 'id') {
   const candidates = [payload?.elements, payload?.data, payload, payload?.orderApprovals].filter(Array.isArray);
   for (const list of candidates) {
-    const id = list.find((entry) => typeof entry?.id === 'string')?.id;
+    const id = list.find((entry) => typeof entry?.[field] === 'string')?.[field];
     if (id) return id;
   }
   return null;
@@ -210,9 +231,9 @@ async function main() {
       for (const param of operation.pathParams) path = path.replace(`{${param}}`, id);
     }
 
-    const { status, payload } = await call(operation.method, path);
+    const { status, payload } = await call(operation.method, path, BODY_OVERRIDE[operation.name]);
     if (operation.pathParams.length === 0) {
-      const id = firstId(payload);
+      const id = firstId(payload, LIST_ID_FIELD[operation.name]);
       if (id) ids.set(operation.name, id);
     }
 

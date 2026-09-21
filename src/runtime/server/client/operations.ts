@@ -134,7 +134,10 @@ type CatalogMiscOperations = {
   // it: a product carries prices, variants, media and custom fields, and a DTO
   // guessed at rather than derived would be a promise this layer cannot keep.
   'listProducts post /store-api/product': { query?: { 'sw-include-search-info'?: boolean }; body?: ShopwareCriteria } & Ok<ShopwareListResponse<Record<string, unknown>>>;
-  'productTableListing post /store-api/product-table-listing': { body?: Body } & Ok<ShopwareListResponse<Record<string, unknown>>>;
+  // The body must carry a real Criteria (at least `page` / `limit`): an empty
+  // body answers `400 Input value "p" is invalid` as the shop tries to parse the
+  // filter, and a paged Criteria returns the listing (verified live 2026-09-21).
+  'productTableListing post /store-api/product-table-listing': { body: ShopwareCriteria } & Ok<ShopwareListResponse<Record<string, unknown>>>;
   'pdpVariantList post /store-api/variant-list/{productId}': { pathParams: { productId: string }; body?: ShopwareCriteria } & Ok<
     ShopwareListResponse<Record<string, unknown>>
   >;
@@ -162,6 +165,10 @@ type CatalogMiscOperations = {
 // ── /store-api/b2b: employee ──────────────────────────────────────────────
 type EmployeeOperations = {
   'listEmployees post /store-api/b2b/employees': { body?: ListBody } & Ok<ShopwareListResponse<Employee>>;
+  // `{id}` is the employee's own id — `employee.id`, exposed as `employeeId` on
+  // the `/b2b/employees` rows — NOT the relation row's top-level `id`, which
+  // answers `404 RESOURCE_NOT_FOUND`. The route exists; passing `employeeId`
+  // returns the employee (verified live 2026-09-21).
   'getEmployee get /store-api/b2b/employee/{id}': { pathParams: { id: string } } & Ok<Employee>;
   'createEmployee post /store-api/b2b/employee': { body?: Body } & Ok<Employee>;
   'addEmployee post /store-api/b2b/employee/add': { body?: { email: string; roleId?: string } } & Ok<Employee>;
@@ -290,7 +297,10 @@ type OrderApprovalOperations = {
 // ── /store-api/sales-representative: customers ────────────────────────────
 type SalesRepCustomerOperations = {
   'listRepCustomers post /store-api/sales-representative/customers': { body?: ShopwareCriteria } & Ok<ShopwareListResponse<B2bCustomer>>;
-  'searchCustomers post /store-api/sales-representative/customer-search': { body?: ShopwareCriteria } & Ok<
+  // The shop requires a top-level `search` string here — an empty body answers
+  // `400 "Parameter search is missing"`, and with it the route returns matches
+  // (verified live 2026-09-21). `listRepCustomers` is the unfiltered counterpart.
+  'searchCustomers post /store-api/sales-representative/customer-search': { body: { search: string } & ShopwareCriteria } & Ok<
     ShopwareListResponse<B2bCustomer>
   >;
   'customerLastOrders post /store-api/sales-representative/customer-last-orders': { body?: ListBody } & Ok<
