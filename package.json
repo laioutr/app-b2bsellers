@@ -1,6 +1,6 @@
 {
   "name": "@laioutr/app-b2bsellers",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "B2B Sellers connector app for Laioutr",
   "repository": "github:laioutr/app-b2bsellers",
   "license": "MIT",
