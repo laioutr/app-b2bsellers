@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
-import { addServerImportsDir, createResolver, defineNuxtModule, installModule } from '@nuxt/kit';
+import { addServerImportsDir, addServerPlugin, createResolver, defineNuxtModule, installModule } from '@nuxt/kit';
 import { defu } from 'defu';
 import { configSchema, resolveDefaults, validateManifest } from './runtime/server/config';
 import { registerLaioutrApp } from '@laioutr-core/kit';
@@ -82,6 +82,20 @@ export default defineNuxtModule<ModuleOptions>({
     // Expose the server-side B2B Sellers client (`useB2bSellersClient`) as a
     // Nitro auto-import for use in server routes and Orchestr handlers.
     addServerImportsDir(resolveRuntimeModule('server/client'));
+
+    // The same client, offered through the request context as well. An installed
+    // app reaching the auto-import from its own `node_modules` finds nothing —
+    // unimport excludes that whole tree — so the context is the route that
+    // survives a release. See the plugin for the full account.
+    addServerPlugin(resolveRuntimeModule('server/plugins/provideClient'));
+
+    // The plugin and the client it calls import `#imports`, which only resolves
+    // for code inside the Nitro bundle. Installed from the registry this runtime
+    // is external by default, and the alias would fail at runtime.
+    nuxt.options.nitro ??= {};
+    nuxt.options.nitro.externals ??= {};
+    nuxt.options.nitro.externals.inline ??= [];
+    nuxt.options.nitro.externals.inline.push(name);
 
     // Backend-only connector: registers Orchestr handlers, no frontend
     // sections/blocks, no image provider.
